@@ -1,4 +1,4 @@
-all: ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o Parser.o Scanner.o javac.o
+all: ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o javac.o
 	ghc --make javac 
 
 %.o: %.hs

@@ -7,9 +7,8 @@ import ErrM
 
 -- Typechecks the Program
 typecheck :: Program -> Err (Program, EnvState)
-typecheck (Program defs) = do
-														(defs', env) <- runStateT (checkDefs defs) newEnv
-														return ((Program defs'), env)
+typecheck (Program defs) = do (defs', env) <- runStateT (checkDefs defs) newEnv
+                              return ((Program defs'), env)
 																
 {----- Definitions -----}
 -- Typechecks all top definitions
@@ -36,14 +35,12 @@ addDefs defs = mapM_ (\(FctDef typ id args _) -> addFun id ([t | (Arg t id) <- a
 
 -- Typechecks one top definition
 checkDef :: FctDef -> S FctDef
-checkDef (FctDef typ id args (CStmt ss)) = do
-																			emptyContext
-																			setReturnType typ
-																			mapM_ (\(t,x) -> addVar t x) [(t',id') | (Arg t' id') <- args]
-																			(retOk,ss') <- checkStmts ss False
-																			if retOk || (typ == TVoid)
-																				then return (FctDef typ id args (CStmt ss'))
-																				else fail $ "NoRetError"
+checkDef (FctDef typ id args (CStmt ss)) = 
+  do emptyContext
+     setReturnType typ
+     mapM_ (\(t,x) -> addVar t x) [(t',id') | (Arg t' id') <- args]
+     (retOk,ss') <- checkStmts ss False
+     if retOk || (typ == TVoid) then return (FctDef typ id args (CStmt ss')) else fail $ "NoRetError"
 {----- END Definitions -----}
 
 
@@ -52,10 +49,9 @@ checkDef (FctDef typ id args (CStmt ss)) = do
 -- (The returned boolean is used for checking if the function returns)
 checkStmts :: [Stmt] -> Bool -> S (Bool,[Stmt])
 checkStmts [] ret     = return (ret,[])
-checkStmts (s:ss) ret = do
-													(ret', s') <- checkStmt s ret
-													(ret'',ss') <- checkStmts ss (ret || ret')
-													return (ret' || ret'', s':ss')	
+checkStmts (s:ss) ret = do (ret', s') <- checkStmt s ret
+                           (ret'',ss') <- checkStmts ss (ret || ret')
+                           return (ret'', s':ss')	
 
 -- Typechecks one statement
 checkStmt :: Stmt -> Bool -> S (Bool,Stmt)
@@ -65,40 +61,47 @@ checkStmt s ret = case s of
                            (ret', ss') <- checkStmts ss ret
                            popScope
                            return (ret || ret', SCStmt (CStmt ss'))
+
   SDecl typ vars     -> do vars' <- mapM checkDecl vars 
                            return (ret,(SDecl typ vars')) where
                              checkDecl :: Item -> S Item
                              checkDecl x = case x of
-                                             NoInit id   -> do
-																															addVar typ id
-																															return (NoInit id)
-                                             Init id exp -> do
-																															ae <- checkExpr [typ] exp "DeclErr"
-																															addVar typ id
-																															return (Init id ae)
+                                             NoInit id   -> do addVar typ id
+                                                               return (NoInit id)
+                                             Init id exp -> do ae <- checkExpr [typ] exp "DeclErr"
+                                                               addVar typ id
+                                                               return (Init id ae)
+
   SAss x e           -> do typ <- lookupVar x
                            ae <- checkExpr [typ] e "x = expr "
                            return (ret, SAss x ae)
+
   SExp e             -> do ae <- inferExpr e
                            return (ret, SExp ae)
+
   SIncr x            -> do checkVar TInt x "i++"
                            return (ret, SIncr x)
+
   SDecr x            -> do checkVar TInt x "i--"
                            return (ret, SDecr x)
+
   SRet e             -> do state <- get
                            let t1 = retType state
                            ae <- checkExpr [t1] e "ReturnFail"
                            return (True, SRet ae)
+
   SVRet              -> do state <- get
                            let t1 = retType state
                            if t1 == TVoid then return () else fail $ "VoidReturnFail"
                            return (ret, SVRet)
+
   SIf e s            -> case e of
                           ETrue -> do (ret',s') <- checkStmt s ret
                                       return (ret || ret', SIf (AExpr TBool e) s')
                           _     -> do ae <- checkExpr [TBool] e "IfNotBool"
                                       (_,s') <- checkStmt s ret
                                       return (ret, SIf ae s')
+
   SIfElse e s1 s2    -> case e of
                           ETrue  -> do (ret',s1') <- checkStmt s1 ret
                                        (_,s2') <- checkStmt s2 ret
@@ -110,6 +113,7 @@ checkStmt s ret = case s of
                                        (ret',s1') <- checkStmt s1 ret
                                        (ret'',s2') <- checkStmt s2 ret
                                        return (ret || (ret' && ret''), SIfElse ae s1' s2')
+
   SWhile e s         -> case e of
                           ETrue -> do (ret',s') <- checkStmt s ret
                                       return (ret || ret', SWhile (AExpr TBool e) s')
@@ -123,68 +127,63 @@ checkStmt s ret = case s of
 -- Infers an expression
 inferExpr :: Expr -> S Expr
 inferExpr exp = case exp of
-  EId x  	        -> do
-											t <- lookupVar x
-											return (AExpr t exp)
-  EInteger i     	-> return (AExpr TInt exp)
+  EId x  	  -> do t <- lookupVar x
+                        return (AExpr t exp)
+
+  EInteger i      -> return (AExpr TInt exp)
+
   EDouble d       -> return (AExpr TDouble exp)
+
   ETrue           -> return (AExpr TBool exp)
+
   EFalse          -> return (AExpr TBool exp)
-  EApp fun es     -> do
-												(ts, t) <- lookupFun fun
-												aes <- sequence [inferExpr e | e <- es ]
-												ts' <- sequence $ map (\(AExpr t _) -> return t) aes
-												if ts == ts' then return (AExpr t exp) else fail $ "FunApp"
+
+  EApp fun es     -> do (ts, t) <- lookupFun fun
+                        aes <- sequence [inferExpr e | e <- es ]
+                        ts' <- sequence $ map (\(AExpr t _) -> return t) aes
+                        if ts == ts' then return (AExpr t exp) else fail $ "FunApp"
+
   EAppS fun str   -> do (ts, t) <- lookupFun fun
                         if head(ts) == TString then return (AExpr t exp) else fail $ "FunAppS"
-  ENeg e          -> do
-											ae@(AExpr t _) <- checkExpr [TInt, TDouble] e "NegFail"
-											return (AExpr t (ENeg ae))
-  ENot e          -> do
-											ae@(AExpr t _) <- checkExpr [TBool] e "NotFail"
-											return (AExpr t (ENot ae))
+
+  ENeg e          -> do ae@(AExpr t _) <- checkExpr [TInt, TDouble] e "NegFail"
+                        return (AExpr t (ENeg ae))
+
+  ENot e          -> do ae@(AExpr t _) <- checkExpr [TBool] e "NotFail"
+                        return (AExpr t (ENot ae))
+
   EMul e1 op e2   -> case op of
-                       Mod -> do
-																(t, ae1, ae2) <- inferBinOp e1 e2 [TInt] "%"
-																return (AExpr t (EMul ae1 op ae2))
-                       Div -> do
-																(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "/"
-																return (AExpr t (EMul ae1 op ae2))
-                       Mul -> do
-																(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "*"
-																return (AExpr t (EMul ae1 op ae2))
+                       Mod -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt] "%"
+                                 return (AExpr t (EMul ae1 op ae2))
+                       Div -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "/"
+                                 return (AExpr t (EMul ae1 op ae2))
+                       Mul -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "*"
+                                 return (AExpr t (EMul ae1 op ae2))
+
   EAdd e1 op e2   -> case op of
-                       Plus  -> do
-																	(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "+"
-																	return (AExpr t (EAdd ae1 op ae2))
-                       Minus -> do
-																	(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "-"
-																	return (AExpr t (EAdd ae1 op ae2))
+                       Plus  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "+"
+                                   return (AExpr t (EAdd ae1 op ae2))
+                       Minus -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "-"
+                                   return (AExpr t (EAdd ae1 op ae2))
+
   ERel e1 op e2   -> do case op of
-                          Lth 	-> do
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "<"
-																		return (AExpr TBool (ERel ae1 op ae2))
-                          Leq  	-> do
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "<="
-																		return (AExpr TBool (ERel ae1 op ae2))
-                          Gth 	-> do 
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] ">"
-																		return (AExpr TBool (ERel ae1 op ae2))
-                          Geq  	-> do 
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] ">="
-																		return (AExpr TBool (ERel ae1 op ae2))
-                          Eq 		-> do
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] "=="
-																		return (AExpr TBool (ERel ae1 op ae2))
-                          Neq  	-> do 
-																		(t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] "!="
-																		return (AExpr TBool (ERel ae1 op ae2))
-  EAnd e1 e2      -> do
-											(t, ae1, ae2) <- inferBinOp e1 e2 [TBool] "&&"
-											return (AExpr t (EAnd ae1 ae2))
-  EOr e1 e2       -> do
-											(t, ae1, ae2) <- inferBinOp e1 e2 [TBool] "||"
-											return (AExpr t (EOr ae1 ae2))
+                          Lth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "<"
+                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Leq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] "<="
+                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Gth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] ">"
+                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Geq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] ">="
+                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Eq  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] "=="
+                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Neq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] "!="
+                                    return (AExpr TBool (ERel ae1 op ae2))
+
+  EAnd e1 e2      -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool] "&&"
+                        return (AExpr t (EAnd ae1 ae2))
+  EOr e1 e2       -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool] "||"
+                        return (AExpr t (EOr ae1 ae2))
 
 -- Checks whether a variable has the correct type
 checkVar :: Type -> Id -> ErrStr -> S ()
