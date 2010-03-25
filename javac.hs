@@ -10,7 +10,7 @@ import JVMGenerator
 import JVMPrinter
 import JVMEnv
 
-check :: String -> IO () 
+check :: String -> IO ()
 check s = let tree = parse $ alexScanTokens s in case typecheck tree of
   Ok (p,env) -> do putStrLn "TYPE CHECK OK, GENERATING JASMIN ASSEMBLY" 
                    let is = instr $ generateInstructions p

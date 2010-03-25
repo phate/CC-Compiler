@@ -218,7 +218,7 @@ generateExpr (AExpr t exp) = case exp of
                         put [IOr]
                         incStack (-1)
 
-  
+
 generateRel :: Expr -> Expr -> JVMInstr -> LabelStr -> S ()
 generateRel e1 e2 i trueLabel = do endLabel <- getLabel
                                    generateExpr e1

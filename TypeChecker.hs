@@ -9,10 +9,10 @@ import ErrM
 typecheck :: Program -> Err (Program, EnvState)
 typecheck (Program defs) = do (defs', env) <- runStateT (checkDefs defs) newEnv
                               return ((Program defs'), env)
-																
+
 {----- Definitions -----}
 -- Typechecks all top definitions
-checkDefs :: [FctDef] -> S [FctDef] 
+checkDefs :: [FctDef] -> S [FctDef]
 checkDefs defs = do predefFuns
                     addDefs defs
                     mainFun <- lookupFun "main"
