@@ -7,12 +7,13 @@ import Parser
 
 $digit = 0-9
 $alpha = [a-zA-Z]
+$ac = [\0-\255]
 
 tokens :-
 	$white+																	;
-	\/\*.*\*\/															;
-	\/\/.*																	;
-	\#.*																		;
+	"/*"([$ac#\*]|\*[$ac # \/])*("*")+"/"   ;
+  "//"[.]*																;
+	"#"[.]*																	;
 	if																			{ \s -> TIf }
 	else																		{ \s -> TElse }
 	while																		{ \s -> TWhile }

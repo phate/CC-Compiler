@@ -19,6 +19,7 @@ check s = let tree = parse $ alexScanTokens s in case typecheck tree of
   Bad err    -> do putStrLn "Type Error"
                    putStrLn err
                    return()
+
 main :: IO ()
 main = do args <- getArgs
           case args of
