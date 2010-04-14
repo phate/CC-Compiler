@@ -1,6 +1,6 @@
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
-import System.FilePath.Posix (splitExtension)
+import System.FilePath.Posix (dropFileName, takeFileName, splitExtension)
 import System.Cmd
 import System.IO
 
@@ -28,10 +28,10 @@ check s file = let tree = parse $ alexScanTokens s in case typecheck tree of
   Ok (p,env) -> do
                   hPutStrLn stderr "OK"
                   let envs = generateInstructions p
-                  let code = getCode file envs
+                  let code = getCode (takeFileName file) envs
                   printEnvInfo envs
                   writeFile (file ++ ".j") code
-                  system $ "java -jar lib/jasmin.jar " ++ file ++ ".j"
+                  system $ "java -jar lib/jasmin.jar " ++ file ++ ".j" ++ " && mv " ++ (takeFileName file) ++ ".class " ++ file ++ ".class" 
                   return ()
   Bad err    -> do hPutStrLn stderr "ERROR"
                    putStrLn err

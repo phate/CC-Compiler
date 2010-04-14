@@ -13,18 +13,20 @@ public class Runtime
 	
 	public static int readInt()
 	{
-		java.util.Scanner in = new java.util.Scanner(System.in);
-		return in.nextInt();
+		//java.util.Scanner in = new java.util.Scanner(System.in);
+		return scanner.nextInt();
 	}
 	
 	public static double readDouble()
 	{
-		java.util.Scanner in = new java.util.Scanner(System.in);
-		return in.nextDouble();
+		//java.util.Scanner in = new java.util.Scanner(System.in);
+		return scanner.nextDouble();
 	}
 	
 	public static void printString(String s)
 	{
 		System.out.println(s);
 	}
+  
+  static java.util.Scanner scanner = new java.util.Scanner(System.in) ;
 }
