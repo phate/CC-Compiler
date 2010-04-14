@@ -10,7 +10,7 @@ import JVMAbs
 type Label = String
 type Var = Id
 type Index = Integer
-type Context = Map Var Index
+type Context = Map Var (Index,Type)
 type Env = [Context]
 
 data JVMEnv = JVMEnv 
@@ -42,15 +42,16 @@ put (x:xs) = do state <- get
                 let instructions = instr state
                 sPut $ state { instr = x:instructions }
                 JVMEnv.put xs
-              
 
--- NEED NEW ADDVAR FUNCTION, DOUBLE = 2 indices
 addVar :: Var -> Type -> S Index
 addVar x t = do state <- get
                 let (scope:rest) = env state
-                let index = (1+) $ maximum $ ((-1):) $ concat [ elems i | i <- (scope:rest)]
-                sPut $ state { env = ((insert x index scope):rest) }
-                return index
+                let vars = concat [elems i | i <- (scope:rest)]
+                let (index,t') = foldr f (-1,TInt) vars
+                let index' = if t' == TDouble then index+2 else index+1
+                sPut $ state { env = ((insert x (index',t) scope):rest) }
+                return index'
+  where f = \(i,t') (f,t'') -> if i == max i f then (i,t') else (f,t'')
 
 lookupVar :: Var -> S Index
 lookupVar x = do state <- get
@@ -58,8 +59,8 @@ lookupVar x = do state <- get
                  lookupVar' (scope:rest) where
                    lookupVar' :: [Context] -> S Index
                    lookupVar' (c:cs) = case Data.Map.lookup x c of
-                                         Nothing -> lookupVar' cs
-                                         Just i  -> return i
+                                         Nothing     -> lookupVar' cs
+                                         Just (i,t)  -> return i
 
 getLabel :: S LabelStr
 getLabel = do state <- get
