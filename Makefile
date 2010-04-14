@@ -1,5 +1,9 @@
-all: ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o javac.o
-	ghc --make javac 
+all: java ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o jlc.o
+	ghc --make jlc 
+
+java: Runtime.java
+	javac $<
+	mv Runtime.class lib/
 
 %.o: %.hs
 	ghc -c $<
@@ -11,5 +15,5 @@ Parser.hs: Parser.y
 	happy $^
 
 clean:
-	$(RM) *.o *.hi Parser.hs Scanner.hs javac
+	$(RM) *.o *.hi lib/RunTime.class Parser.hs Scanner.hs jlc
 
