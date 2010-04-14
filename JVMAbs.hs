@@ -1,5 +1,7 @@
 module JVMAbs where
 
+import ParserAbs
+
 type LabelStr = String
 
 type VarIndex = Integer
@@ -7,6 +9,7 @@ type VarIndex = Integer
 data JVMInstr =
    IPush Integer
  | DPush Double
+ | SPush String
 
  | Label LabelStr
 
@@ -21,22 +24,27 @@ data JVMInstr =
 
  | Ifne LabelStr
  | Ifeq LabelStr
+ | Iflt LabelStr
+ | Ifle LabelStr
+ | Ifgt LabelStr
+ | Ifge LabelStr
 
  | Dcmpl
- | Dcmpg
 
  | IAdd
  | ISub
  | IMul
  | IDiv
  | IRem
- | IAnd
- | IOr
+ | IXor
 
  | DAdd
  | DSub
  | DMul
  | DDiv
+ 
+ | INeg
+ | DNeg
 
  | ILoad Integer
  | IStore Integer
@@ -46,5 +54,12 @@ data JVMInstr =
  | IInc VarIndex Integer
 
  | Pop
+ | Pop2
+ 
+ | VReturn
+ | IReturn
+ | DReturn
+ 
+ | InvokeStatic Id [Type] Type
 
-  deriving (Eq,Ord,Show)
+  deriving (Eq,Show)

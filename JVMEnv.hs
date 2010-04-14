@@ -15,6 +15,9 @@ type Env = [Context]
 
 data JVMEnv = JVMEnv 
     {
+     funName :: Id,
+     params :: [Type],
+     returnType :: Type,
      currentStackDepth :: Integer,
      maxStackDepth :: Integer,
      labelCounter :: Integer,
@@ -31,7 +34,7 @@ sPut = Control.Monad.State.put
 
 {----- Environment functions -----}
 newEnv :: JVMEnv
-newEnv = JVMEnv { currentStackDepth = 0, maxStackDepth = 0, labelCounter = 0, env = [empty], instr = [] }
+newEnv = JVMEnv { funName = "", params = [], returnType = TVoid, currentStackDepth = 0, maxStackDepth = 0, labelCounter = 0, env = [empty], instr = [] }
 
 put :: [JVMInstr] -> S ()
 put []     = return ()
@@ -39,13 +42,15 @@ put (x:xs) = do state <- get
                 let instructions = instr state
                 sPut $ state { instr = x:instructions }
                 JVMEnv.put xs
+              
 
-addVar :: Var -> S Index
-addVar x = do state <- get
-              let (scope:rest) = env state
-              let i = (1+) $ maximum $ ((-1):) $ concat [ elems i | i <- (scope:rest)]
-              sPut $ state { env = ((insert x i scope):rest) }
-              return i
+-- NEED NEW ADDVAR FUNCTION, DOUBLE = 2 indices
+addVar :: Var -> Type -> S Index
+addVar x t = do state <- get
+                let (scope:rest) = env state
+                let index = (1+) $ maximum $ ((-1):) $ concat [ elems i | i <- (scope:rest)]
+                sPut $ state { env = ((insert x index scope):rest) }
+                return index
 
 lookupVar :: Var -> S Index
 lookupVar x = do state <- get
@@ -53,8 +58,8 @@ lookupVar x = do state <- get
                  lookupVar' (scope:rest) where
                    lookupVar' :: [Context] -> S Index
                    lookupVar' (c:cs) = case Data.Map.lookup x c of
-                                         Nothing  -> lookupVar' cs
-                                         Just i -> return i
+                                         Nothing -> lookupVar' cs
+                                         Just i  -> return i
 
 getLabel :: S LabelStr
 getLabel = do state <- get
@@ -79,6 +84,22 @@ incStack i = do state <- get
                 let max = maxStackDepth state
                 let newMax = if curr > max then curr else max
                 sPut $ state { currentStackDepth = curr, maxStackDepth = newMax }
+                
+getReturnType :: S Type
+getReturnType = do state <- get
+                   return (returnType state)
+                   
+setReturnType :: Type -> S ()
+setReturnType t = do state <- get
+                     sPut $ state { returnType = t }
+                     
+setFunctionName :: Id -> S ()
+setFunctionName name = do state <- get
+                          sPut $ state { funName = name }
+
+setParameters :: [Type] -> S ()
+setParameters typs = do state <- get
+                        sPut $ state { params = typs }
                 
               
               

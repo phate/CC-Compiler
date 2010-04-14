@@ -1,0 +1,10 @@
+Variable array indices (For getting correct index and setting max locals)
+Correct error messages when typechecking
+filename parsing for correct file.j, file.class and file in JVMPrinter.hs
+Change name from javac to jlc
+(Fix falling of code in another way?? Instead of just adding returns??)
+
+
+Files that need change for above:
+JVMEnv.hs
+Javac.hs (rename to jlc)

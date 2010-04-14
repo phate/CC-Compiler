@@ -141,7 +141,7 @@ inferExpr exp = case exp of
   EApp fun es     -> do (ts, t) <- lookupFun fun
                         aes <- sequence [inferExpr e | e <- es ]
                         ts' <- sequence $ map (\(AExpr t _) -> return t) aes
-                        if ts == ts' then return (AExpr t exp) else fail $ "FunApp"
+                        if ts == ts' then return (AExpr t (EApp fun aes)) else fail $ "FunApp"
 
   EAppS fun str   -> do (ts, t) <- lookupFun fun
                         if head(ts) == TString then return (AExpr t exp) else fail $ "FunAppS"

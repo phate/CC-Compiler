@@ -1,5 +1,6 @@
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
+import System.Cmd
 
 import Scanner
 import Parser
@@ -10,11 +11,24 @@ import JVMGenerator
 import JVMPrinter
 import JVMEnv
 
+printEnv :: JVMEnv -> IO ()
+printEnv e = do putStrLn $ "CurrStack: " ++ (show $ currentStackDepth e)
+                putStrLn $ "MaxStack:  " ++ (show $ maxStackDepth e)
+                putStrLn ""
+                return ()
+
+printEnvInfo :: [JVMEnv] -> IO ()
+printEnvInfo envs = mapM_ printEnv envs
+                         
+
 check :: String -> IO ()
 check s = let tree = parse $ alexScanTokens s in case typecheck tree of
   Ok (p,env) -> do putStrLn "TYPE CHECK OK, GENERATING JASMIN ASSEMBLY" 
-                   let is = instr $ generateInstructions p
-                   sequence_ [putStrLn i | i <- generateCode is]
+                   let envs = generateInstructions p
+                   let code = getCode "test" envs
+		   printEnvInfo envs
+		   writeFile "test.j" code
+		   system "java -jar lib/jasmin.jar test.j"
                    return ()
   Bad err    -> do putStrLn "Type Error"
                    putStrLn err
