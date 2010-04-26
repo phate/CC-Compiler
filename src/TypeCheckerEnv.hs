@@ -69,7 +69,7 @@ lookupVar x = do state <- get
                  let (sig, (scope:rest)) = env state
                  lookupVar' (scope:rest) where
                    lookupVar' :: [Context] -> S Type
-                   lookupVar' []     = fail $ "VarNotFound"
+                   lookupVar' []     = fail $ "Variable " ++ x ++ " not found"
                    lookupVar' (c:cs) = case Data.Map.lookup x c of
                                          Nothing  -> lookupVar' cs
                                          Just typ -> return typ
@@ -79,7 +79,7 @@ addFun :: Id -> ([Type], Type) -> S ()
 addFun id typs = do state <- get
                     let (sig, cont) = env state
                     case member id sig of
-                      True  -> fail $ "AddFun"
+                      True  -> fail $ "Function " ++ id ++ " multiply declared"
                       False -> put $ state { env = (insert id typs sig, cont) }
 
 -- Returns the return type & parameter types of a function in the current signature
@@ -87,6 +87,6 @@ lookupFun :: Id -> S ([Type], Type)
 lookupFun id = do state <- get
                   let (sig, const) = env state
                   case Data.Map.lookup id sig of
-                    Nothing  -> fail $ "FunNotFound"
+                    Nothing  -> fail $ "Function " ++ id ++ " not found"
                     Just ret -> return ret
 {----- END Environment functions -----}

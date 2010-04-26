@@ -20,6 +20,7 @@ data JVMEnv = JVMEnv
      returnType :: Type,
      currentStackDepth :: Integer,
      maxStackDepth :: Integer,
+     maxLocals :: Integer,
      labelCounter :: Integer,
      env :: Env,
      instr :: [JVMInstr]
@@ -34,7 +35,7 @@ sPut = Control.Monad.State.put
 
 {----- Environment functions -----}
 newEnv :: JVMEnv
-newEnv = JVMEnv { funName = "", params = [], returnType = TVoid, currentStackDepth = 0, maxStackDepth = 0, labelCounter = 0, env = [empty], instr = [] }
+newEnv = JVMEnv { funName = "", params = [], returnType = TVoid, currentStackDepth = 0, maxStackDepth = 0, maxLocals = 0, labelCounter = 0, env = [empty], instr = [] }
 
 put :: [JVMInstr] -> S ()
 put []     = return ()
@@ -49,10 +50,17 @@ addVar x t = do state <- get
                 let vars = concat [elems i | i <- (scope:rest)]
                 let (index,t') = foldr f (-1,TInt) vars
                 let index' = if t' == TDouble then index+2 else index+1
-                sPut $ state { env = ((insert x (index',t) scope):rest) }
+                let currMax = maxLocals state
+                let newMax = getNewMaxLocals index' t currMax
+                sPut $ state { env = ((insert x (index',t) scope):rest), maxLocals = newMax }
                 return index'
   where f = \(i,t') (f,t'') -> if i == max i f then (i,t') else (f,t'')
+        getNewMaxLocals i t currMax = case t of
+                                        TDouble -> if (i+2) > currMax then (i+2) else currMax
+                                        _       -> if (i+1) > currMax then (i+1) else currMax
+  
 
+ 
 lookupVar :: Var -> S Index
 lookupVar x = do state <- get
                  let (scope:rest) = env state

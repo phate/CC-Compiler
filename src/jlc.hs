@@ -12,15 +12,6 @@ import ErrM
 import JVMGenerator
 import JVMPrinter
 import JVMEnv
-
-printEnv :: JVMEnv -> IO ()
-printEnv e = do putStrLn $ "CurrStack: " ++ (show $ currentStackDepth e)
-                putStrLn $ "MaxStack:  " ++ (show $ maxStackDepth e)
-                putStrLn ""
-                return ()
-
-printEnvInfo :: [JVMEnv] -> IO ()
-printEnvInfo envs = mapM_ printEnv envs
                          
 
 check :: String -> String -> IO ()
@@ -29,7 +20,6 @@ check s file = let tree = parse $ alexScanTokens s in case typecheck tree of
                   hPutStrLn stderr "OK"
                   let envs = generateInstructions p
                   let code = getCode (takeFileName file) envs
-                  printEnvInfo envs
                   writeFile (file ++ ".j") code
                   system $ "java -jar lib/jasmin.jar " ++ file ++ ".j" ++ " && mv " ++ (takeFileName file) ++ ".class " ++ file ++ ".class" 
                   return ()
@@ -47,5 +37,5 @@ main = do args <- getArgs
                                       check c file'
                           _     -> do putStrLn "No *.jl file as input"
                                       exitFailure  
-            _      -> do putStrLn "Usage: Compiler <source>"
+            _      -> do putStrLn "Usage: jlc <source>"
                          exitFailure

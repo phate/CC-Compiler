@@ -28,7 +28,7 @@ getHeader fileName = ".class public " ++ fileName ++ "\n" ++
                      
 getFunction :: FileName -> JVMEnv -> String
 getFunction name env = ".method public static " ++ (funName env) ++ "(" ++ (getTypes $ params env) ++ ")" ++ (getType $ returnType env) ++ "\n" ++
-                       ".limit locals " ++ "50\n" ++ -- TODO!!!!!!!!!
+                       ".limit locals " ++ (show $ maxLocals env) ++ "\n" ++
                        ".limit stack " ++ (show $ maxStackDepth env) ++ "\n" ++
                        "  entry:\n" ++
                        unlines (getInstructions name$ instr env) ++

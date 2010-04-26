@@ -16,5 +16,5 @@ Parser.hs: Parser.y
 	happy $^
 
 clean:
-	$(RM) *.o *.hi ../lib/RunTime.class Parser.hs Scanner.hs ../jlc
+	$(RM) *.o *.hi ../lib/Runtime.class Parser.hs Scanner.hs ../jlc
 

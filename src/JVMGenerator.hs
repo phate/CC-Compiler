@@ -21,7 +21,7 @@ generateDef (FctDef typ id args (CStmt ss)) =
      setReturnType typ
      mapM_ (\(x, t) -> addVar x t) [(id', t) | (Arg t id') <- args]
      generateStmts ss
-     case typ of -- Always add an ending return (fixes: "falling of code" for void-functions, and "illegal target of jump or branch") UGLY FIX???
+     case typ of -- Always add an ending return (fixes: "falling of code" for void-functions, and "illegal target of jump or branch")
        TVoid   -> put [VReturn]
        TDouble -> put [DReturn]
        _       -> put [IReturn]
