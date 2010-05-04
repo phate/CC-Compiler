@@ -1,8 +1,18 @@
-all: java ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o jlc.o
+all: llvm
+
+llvm: llvmr ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o LLVMAbs.o LLVMEnv.o LLVMGenerator.o LLVMPrinter.o Parser.o Scanner.o jlc.o
 	ghc --make jlc
 	mv jlc ../
 
-java: Runtime.java
+llvmr: Runtime.ll
+	llvm-as $<
+	mv Runtime.bc ../lib/
+
+jvm: javar ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o jlc.o
+	ghc --make jlc
+	mv jlc ../
+
+javar: Runtime.java
 	javac $<
 	mv Runtime.class ../lib/
 
@@ -16,5 +26,5 @@ Parser.hs: Parser.y
 	happy $^
 
 clean:
-	$(RM) *.o *.hi ../lib/Runtime.class Parser.hs Scanner.hs ../jlc
+	$(RM) *.o *.hi ../lib/Runtime.class ../lib/Runtime.bc Parser.hs Scanner.hs ../jlc
 

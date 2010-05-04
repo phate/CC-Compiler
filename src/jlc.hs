@@ -9,19 +9,21 @@ import Parser
 import TypeChecker
 import ErrM
 
-import JVMGenerator
-import JVMPrinter
-import JVMEnv
+import LLVMGenerator
+import LLVMPrinter
+import LLVMEnv
                          
 
 check :: String -> String -> IO ()
 check s file = let tree = parse $ alexScanTokens s in case typecheck tree of
   Ok (p,env) -> do
                   hPutStrLn stderr "OK"
+                  putStrLn (show p)
                   let envs = generateInstructions p
-                  let code = getCode (takeFileName file) envs
-                  writeFile (file ++ ".j") code
-                  system $ "java -jar lib/jasmin.jar " ++ file ++ ".j" ++ " && mv " ++ (takeFileName file) ++ ".class " ++ file ++ ".class" 
+                  let code = getCode envs
+                  writeFile (file ++ ".ll") code
+                  system $ "llvm-as -f " ++ file ++ ".ll" ++ "&& llvm-ld lib/Runtime.bc " ++ file ++ ".bc" ++ "&& mv a.out* " ++ (dropFileName file)
+                  --system $ "java -jar lib/jasmin.jar " ++ file ++ ".j" ++ " && mv " ++ (takeFileName file) ++ ".class " ++ file ++ ".class" 
                   return ()
   Bad err    -> do hPutStrLn stderr "ERROR"
                    putStrLn err

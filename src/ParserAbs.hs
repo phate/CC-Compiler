@@ -44,6 +44,7 @@ data Type =
   | TBool
   | TVoid
 	| TString
+  | TStringP
   deriving (Eq, Show)
 
 data Expr =

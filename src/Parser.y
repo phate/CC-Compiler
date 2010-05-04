@@ -92,7 +92,7 @@ Expr4				: Expr4 MulOp	Expr5										{ EMul $1 $2 $3 }
 Expr5				: '!' Expr6														{ ENot $2 }
 						| '-' Expr6														{ ENeg $2 }
 						| Expr6																{ $1 }
-Expr6				: id '(' string ')'										{ EAppS $1 $3 }
+Expr6				: id '(' string ')'										{ EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									{ EApp $1 $3 }
 						| 'false'															{ EFalse }
 						| 'true'															{ ETrue }
