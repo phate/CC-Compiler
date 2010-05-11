@@ -22,13 +22,18 @@ import ParserAbs
 	'void'		{ TTVoid }
 	'true'		{ TTrue }
 	'false'		{ TFalse }
-	'('				{ TOB }
+	'new'     { TNew }
+  'length'  { TLength }
+  '('				{ TOB }
 	')'				{ TCB }
+  '['       { TOSB }
+  ']'       { TCSB }
 	'{'				{ TOCB }
 	'}'				{ TCCB }
 	';'				{ TSemi }
 	','				{ TComma }
-	'++'			{ TIncr }
+	'.'       { TDot }
+  '++'			{ TIncr }
 	'--'			{ TDecr }
 	'='				{ TAss }
 	'||'			{ TOr }
@@ -62,7 +67,7 @@ ListStmt		: {- empty -}													{ [] }
 Stmt				: ';'																	{ SEmpty }
 						| CmpStmt 														{ SCStmt $1 }
 						| Type ListItem ';'										{ SDecl $1 $2 }
-						| id '=' Expr ';'											{ SAss $1 $3 }
+						| id ListIdx '=' Expr ';'							{ SAss $1 $2 $4 }
 						| id '++' ';'													{ SIncr $1 }
 						| id '--' ';'													{ SDecr $1 }
 						| 'return' Expr	';'										{ SRet $2 }
@@ -75,10 +80,15 @@ ListItem		: Item																{ (:[]) $1 }
 						| Item ',' ListItem 									{ (:) $1 $3 }
 Item				: id																	{ NoInit $1 }
 						| id '=' Expr													{ Init $1 $3 }
-Type				: 'int'																{ TInt }
-						|	'double'														{ TDouble }
-						| 'boolean'														{ TBool }
+Type				: 'int' ListSB												{ TInt $2 }
+						|	'double' ListSB											{ TDouble $2 }
+						| 'boolean' ListSB										{ TBool $2 }
 						| 'void'															{ TVoid }
+PType       : 'int'                               { TInt 0 }
+            | 'double'                            { TDouble 0 }
+            | 'boolean'                           { TBool 0 }
+ListSB      : {- empty -}                         { 0 }
+            | '['']' ListSB                       { (+1) $3 }
 Expr				: Expr1 '||' Expr											{ EOr $1 $3 }
 						|	Expr1																{ $1 }
 Expr1				: Expr2 '&&' Expr1										{ EAnd $1 $3 }
@@ -89,17 +99,23 @@ Expr3				: Expr3 AddOp Expr4										{ EAdd $1 $2 $3 }
 						| Expr4																{ $1 }
 Expr4				: Expr4 MulOp	Expr5										{ EMul $1 $2 $3 }
 						| Expr5																{ $1 }
-Expr5				: '!' Expr6														{ ENot $2 }
-						| '-' Expr6														{ ENeg $2 }
-						| Expr6																{ $1 }
-Expr6				: id '(' string ')'										{ EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
+Expr5       : 'new' PType ListIdx                 { ENew $2 $3 }                         
+            | Expr6                               { $1 }
+Expr6				: '!' Expr7														{ ENot $2 }
+						| '-' Expr7														{ ENeg $2 }
+						| Expr7																{ $1 }
+Expr7       : id '.' 'length'                     { EDot $1  "length" }
+            | Expr8                               { $1 }
+Expr8				: id '(' string ')'										{ EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									{ EApp $1 $3 }
 						| 'false'															{ EFalse }
 						| 'true'															{ ETrue }
 						| double															{ EDouble $1 }
 						| integer															{ EInteger $1 }
-						| id																	{ EId $1 }
+						| id ListIdx													{ if null $2 then EId $1 else EIdx $1 $2 }
 						| '(' Expr ')'												{ $2 }
+ListIdx     : {- empty -}                         { [] }
+            | '[' Expr ']' ListIdx                { (:) $2 $4 }
 ListExpr		:	{- empty -}													{ [] }
 						| Expr																{ (:[]) $1 }
 						| Expr ',' ListExpr										{ (:) $1 $3 }
@@ -134,13 +150,18 @@ data Token
 	| TTVoid
 	| TTrue
 	| TFalse
-	| TOB
+	| TNew 
+  | TLength 
+  | TOB
 	| TCB
-	| TOCB
+	| TOSB
+  | TCSB
+  | TOCB
 	| TCCB
 	| TSemi
 	| TComma
-	| TIncr
+	| TDot
+  | TIncr
 	| TDecr
 	| TAss
 	| TOr

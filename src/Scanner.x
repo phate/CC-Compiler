@@ -20,6 +20,8 @@ tokens :-
 	return																	{ \s -> TReturn }
 	true																		{ \s -> TTrue }
 	false																		{ \s -> TFalse }
+  new                                     { \s -> TNew }
+  length                                  { \s -> TLength }
 	int																			{ \s -> TTInt }
 	double																	{ \s -> TTDouble }
 	boolean																	{ \s -> TTBool }
@@ -30,14 +32,17 @@ tokens :-
 	$digit+																	{ \s -> TPInt (read s) }	
 	\(																			{ \s -> TOB }
 	\)																			{ \s -> TCB }
+  \[                                      { \s -> TOSB }
+  \]                                      { \s -> TCSB }
 	\{																			{ \s -> TOCB }
 	\}																			{ \s -> TCCB }
 	\;																			{ \s -> TSemi }
 	\,																			{ \s -> TComma }
+  \.                                      { \s -> TDot }
 	\+\+																		{ \s -> TIncr }
 	\-\-																		{ \s -> TDecr }
 	\=																			{ \s -> TAss }
-	\|\|																		{ \s -> TOr }
+  \|\|																		{ \s -> TOr }
 	\&\&																		{ \s -> TAnd }
 	\!																			{ \s -> TNot }
 	\-																			{ \s -> TMinus }

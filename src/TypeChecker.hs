@@ -17,16 +17,16 @@ checkDefs defs = do predefFuns
                     addDefs defs
                     mainFun <- lookupFun "main"
                     case mainFun of
-                      ([], TInt)  -> mapM checkDef defs
-                      _           -> fail $ "Wrong definition of main function"
+                      ([], TInt 0)  -> mapM checkDef defs
+                      _             -> fail $ "Wrong definition of main function"
 
 -- The predefined functions that can be used
 predefFuns :: S ()
-predefFuns = do addFun "printInt" ([TInt], TVoid)
-                addFun "printDouble" ([TDouble], TVoid)
+predefFuns = do addFun "printInt" ([TInt 0], TVoid)
+                addFun "printDouble" ([TDouble 0], TVoid)
                 addFun "printString" ([TString], TVoid)
-                addFun "readInt" ([], TInt)
-                addFun "readDouble" ([], TDouble)
+                addFun "readInt" ([], TInt 0)
+                addFun "readDouble" ([], TDouble 0)
                 return ()
 
 -- Adds all top definitions to the environment, i.e. creates the signature
@@ -71,18 +71,18 @@ checkStmt s ret = case s of
                                              Init id exp -> do ae <- checkExpr [typ] exp (show x)
                                                                addVar typ id
                                                                return (Init id ae)
-
-  SAss x e           -> do typ <- lookupVar x
-                           ae <- checkExpr [typ] e (show s)
-                           return (ret, SAss x ae)
+-- FIXME: es is not checked and annotated
+  SAss x es e         -> do typ <- lookupVar x
+                            ae <- checkExpr [typ] e (show s)
+                            return (ret, SAss x es ae)
 
   SExp e             -> do ae <- inferExpr e
                            return (ret, SExp ae)
 
-  SIncr x            -> do checkVar TInt x (show s)
+  SIncr x            -> do checkVar (TInt 0) x (show s)
                            return (ret, SIncr x)
 
-  SDecr x            -> do checkVar TInt x (show s)
+  SDecr x            -> do checkVar (TInt 0) x (show s)
                            return (ret, SDecr x)
 
   SRet e             -> do state <- get
@@ -97,27 +97,27 @@ checkStmt s ret = case s of
 
   SIf e stm          -> case e of
                           ETrue -> do (ret',s') <- checkStmt stm ret
-                                      return (ret || ret', SIf (AExpr TBool e) s')
-                          _     -> do ae <- checkExpr [TBool] e ("Error in if condition, " ++ (show e))
+                                      return (ret || ret', SIf (AExpr (TBool 0) e) s')
+                          _     -> do ae <- checkExpr [TBool 0] e ("Error in if condition, " ++ (show e))
                                       (_,s') <- checkStmt stm ret
                                       return (ret, SIf ae s')
 
   SIfElse e s1 s2    -> case e of
                           ETrue  -> do (ret',s1') <- checkStmt s1 ret
                                        (_,s2') <- checkStmt s2 ret
-                                       return (ret || ret', SIfElse (AExpr TBool e) s1' s2')
+                                       return (ret || ret', SIfElse (AExpr (TBool 0) e) s1' s2')
                           EFalse -> do (_,s1') <- checkStmt s1 ret
                                        (ret',s2') <- checkStmt s2 ret
-                                       return (ret || ret', SIfElse (AExpr TBool e) s1' s2')
-                          _      -> do ae <- checkExpr [TBool] e ("Error in if-else condition, " ++ (show e))
+                                       return (ret || ret', SIfElse (AExpr (TBool 0) e) s1' s2')
+                          _      -> do ae <- checkExpr [TBool 0] e ("Error in if-else condition, " ++ (show e))
                                        (ret',s1') <- checkStmt s1 ret
                                        (ret'',s2') <- checkStmt s2 ret
                                        return (ret || (ret' && ret''), SIfElse ae s1' s2')
 
   SWhile e s         -> case e of
                           ETrue -> do (ret',s') <- checkStmt s ret
-                                      return (ret || ret', SWhile (AExpr TBool e) s')
-                          _     -> do ae <- checkExpr [TBool] e ("Error in while condition, " ++ (show e))
+                                      return (ret || ret', SWhile (AExpr (TBool 0) e) s')
+                          _     -> do ae <- checkExpr [TBool 0] e ("Error in while condition, " ++ (show e))
                                       (_,s') <- checkStmt s ret
                                       return (ret, SWhile ae s')
 {----- END Statements -----}
@@ -127,16 +127,16 @@ checkStmt s ret = case s of
 -- Infers an expression
 inferExpr :: Expr -> S Expr
 inferExpr exp = case exp of
-  EId x  	  -> do t <- lookupVar x
+  EId x           -> do t <- lookupVar x
                         return (AExpr t exp)
 
-  EInteger i      -> return (AExpr TInt exp)
+  EInteger i      -> return (AExpr (TInt 0) exp)
 
-  EDouble d       -> return (AExpr TDouble exp)
+  EDouble d       -> return (AExpr (TDouble 0) exp)
 
-  ETrue           -> return (AExpr TBool exp)
+  ETrue           -> return (AExpr (TBool 0) exp)
 
-  EFalse          -> return (AExpr TBool exp)
+  EFalse          -> return (AExpr (TBool 0) exp)
 
   EApp fun es     -> do (ts, t) <- lookupFun fun
                         aes <- sequence [inferExpr e | e <- es ]
@@ -146,50 +146,76 @@ inferExpr exp = case exp of
   EAppS fun str   -> do (ts, t) <- lookupFun fun
                         if head(ts) == TString then return (AExpr t exp) else fail $ (show exp) ++ ": Bad arguments"
 
-  ENeg e          -> do ae@(AExpr t _) <- checkExpr [TInt, TDouble] e (show exp)
+  ENew t es       -> do aes <- sequence [inferExpr e | e <- es]
+                        let d = typeDim t
+                        let ts = and $ map (\(AExpr t _) -> if t == (TInt 0) then True else False) aes
+                        if ts == False
+                          then fail $ (show exp) ++ " Indeces are not of type int"
+                          else return (AExpr (setTypeDim t (d+(length es))) (ENew t es))                        
+ 
+  EIdx id es      -> do t <- lookupVar id
+                        let d = typeDim t
+                        aes <- sequence [inferExpr e | e <- es ]
+                        let ts =  and $ map (\(AExpr t _) -> if t == (TInt 0) then True else False)  aes
+                        if d < (length es)
+                          then fail $ (show exp) ++ " Too many indeces for array"
+                          else if ts == False  
+                                then fail $ (show exp) ++ " Indeces are not of type int"
+                                else return (AExpr (setTypeDim t (d-(length es))) (EIdx id aes))  
+
+  EDot x s        -> do t <- lookupVar x
+                        if s /= "length"
+                          then fail $ (show exp) ++ "Attribute not known"
+                          else edot $ typeDim t
+    where 
+      edot i = if i <= 0
+                then fail $ x ++ " is not an array"
+                else return (AExpr (TInt 0) exp)
+
+  ENeg e          -> do ae@(AExpr t _) <- checkExpr [TInt 0, TDouble 0] e (show exp)
                         return (AExpr t (ENeg ae))
 
-  ENot e          -> do ae@(AExpr t _) <- checkExpr [TBool] e (show exp)
+  ENot e          -> do ae@(AExpr t _) <- checkExpr [TBool 0] e (show exp)
                         return (AExpr t (ENot ae))
 
   EMul e1 op e2   -> case op of
-                       Mod -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt] (show exp)
+                       Mod -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0] (show exp)
                                  return (AExpr t (EMul ae1 op ae2))
-                       Div -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
+                       Div -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
                                  return (AExpr t (EMul ae1 op ae2))
-                       Mul -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
+                       Mul -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
                                  return (AExpr t (EMul ae1 op ae2))
 
   EAdd e1 op e2   -> case op of
-                       Plus  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
+                       Plus  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
                                    return (AExpr t (EAdd ae1 op ae2))
-                       Minus -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
+                       Minus -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
                                    return (AExpr t (EAdd ae1 op ae2))
 
   ERel e1 op e2   -> do case op of
-                          Lth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
-                          Leq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
-                          Gth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
-                          Geq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
-                          Eq  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
-                          Neq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt, TDouble, TBool] (show exp)
-                                    return (AExpr TBool (ERel ae1 op ae2))
+                          Lth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
+                          Leq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
+                          Gth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
+                          Geq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
+                          Eq  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0, TBool 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
+                          Neq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TInt 0, TDouble 0, TBool 0] (show exp)
+                                    return (AExpr (TBool 0) (ERel ae1 op ae2))
 
-  EAnd e1 e2      -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool] (show exp)
+  EAnd e1 e2      -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool 0] (show exp)
                         return (AExpr t (EAnd ae1 ae2))
-  EOr e1 e2       -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool] (show exp)
+  EOr e1 e2       -> do (t, ae1, ae2) <- inferBinOp e1 e2 [TBool 0] (show exp)
                         return (AExpr t (EOr ae1 ae2))
 
 -- Checks whether a variable has the correct type
 checkVar :: Type -> Id -> ErrStr -> S ()
 checkVar typ x err = do typ2 <- lookupVar x
                         if typ == typ2 then return ()
-                           else fail $ err ++ ": Expected " ++ show typ ++ ", got " ++ show typ2
+                          else fail $ err ++ ": Expected " ++ show typ ++ ", got " ++ show typ2
 
 -- Checks whether an expression has the correct type
 checkExpr :: Types -> Expr -> ErrStr -> S Expr
@@ -205,3 +231,13 @@ inferBinOp e1 e2 typs err = do ae1@(AExpr t1 _) <- inferExpr e1
                                      return (t1, ae1, ae2)
                                      else fail $ err ++ ": Expected " ++ show typs ++ " for first operand, got " ++ show t1
 {----- END Expressions -----}
+
+typeDim :: Type -> Int
+typeDim (TInt i) = i
+typeDim (TDouble i) = i
+typeDim (TBool i) = i
+
+setTypeDim :: Type -> Int -> Type
+setTypeDim (TInt _) i     = (TInt i)
+setTypeDim (TDouble _) i  = (TDouble i)
+setTypeDim (TBool _) i    = (TBool i)

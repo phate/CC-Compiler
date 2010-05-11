@@ -22,7 +22,7 @@ data Stmt =
     SEmpty
   | SCStmt CmpStmt
   | SDecl Type [Item]
-  | SAss Id Expr
+  | SAss Id [Expr] Expr
   | SIncr Id
   | SDecr Id
   | SRet Expr
@@ -39,9 +39,9 @@ data Item =
   deriving Show
 
 data Type =
-    TInt
-  | TDouble
-  | TBool
+    TInt Int
+  | TDouble Int
+  | TBool Int
   | TVoid
 	| TString
   | TStringP
@@ -55,8 +55,11 @@ data Expr =
   | EFalse
   | EApp Id [Expr]
   | EAppS Id String
+  | EIdx Id [Expr]
+  | EDot Id Id
   | ENeg Expr
   | ENot Expr
+  | ENew Type [Expr]
   | EMul Expr MulOp Expr
   | EAdd Expr AddOp Expr
   | ERel Expr RelOp Expr

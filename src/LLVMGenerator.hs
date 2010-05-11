@@ -43,7 +43,7 @@ genStmt (SCStmt (CStmt ss)) = do  pushScope
 genStmt (SRet e)            = do  (t,v) <- genExp e
                                   addInstr (LLReturn t v)
 genStmt SVRet               = do  addInstr LLVReturn
-genStmt (SAss x e)          = do  (lid,t) <- lookupVar x
+genStmt (SAss x _ e)        = do  (lid,t) <- lookupVar x
                                   (_,v) <- genExp e
                                   addInstr (LLStore t v (OL lid))
 genStmt (SDecl t vs) = do   mapM_ genDecl vs
@@ -51,9 +51,9 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                               genDecl (NoInit x) = do lid <- addVar x t
                                                       addInstr (LLAlloc (OL lid) t)
                                                       case t of
-                                                        TInt -> addInstr (LLStore t (OI 0) (OL lid))
-                                                        TDouble -> addInstr (LLStore t (OD 0.0) (OL lid))
-                                                        TBool -> addInstr (LLStore t (OI 0) (OL lid))
+                                                        TInt 0    -> addInstr (LLStore t (OI 0) (OL lid))
+                                                        TDouble 0 -> addInstr (LLStore t (OD 0.0) (OL lid))
+                                                        TBool 0   -> addInstr (LLStore t (OI 0) (OL lid))
                               genDecl (Init x e) = do (_,v) <- genExp e
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OL lid) t)
@@ -63,7 +63,7 @@ genStmt (SIncr x)           = do  (lid,t) <- lookupVar x
                                   tr <- createLLVMId
                                   addInstr (LLLoad (OL tr) t lid)    
                                   lid' <- createLLVMId
-                                  if t == TInt
+                                  if t == TInt 0
                                     then addInstr (LLAdd (OL lid') t (OL tr) (OI 1))
                                     else addInstr (LLAdd (OL lid') t (OL tr) (OD 1.0))
                                   addInstr (LLStore t (OL lid') (OL lid))
@@ -71,7 +71,7 @@ genStmt (SDecr x)           = do  (lid,t) <- lookupVar x
                                   tr <- createLLVMId
                                   addInstr (LLLoad (OL tr) t lid)    
                                   lid' <- createLLVMId
-                                  if t == TInt
+                                  if t == TInt 0
                                     then addInstr (LLSub (OL lid') t (OL tr) (OI 1))
                                     else addInstr (LLSub (OL lid') t (OL tr) (OD 1.0))
                                   addInstr (LLStore t (OL lid') (OL lid))
@@ -114,8 +114,8 @@ genExp (AExpr _ (EId id))     = do  (lid,t) <- lookupVar id
                                     return (t, (OL lid'))
 genExp (AExpr t (EInteger i)) = return (t, (OI i))
 genExp (AExpr t (EDouble  d)) = return (t, (OD d))
-genExp (AExpr _ ETrue)        = return (TBool, (OI 1))
-genExp (AExpr _ EFalse)       = return (TBool, (OI 0))
+genExp (AExpr t ETrue)        = return (t, (OI 1))
+genExp (AExpr t EFalse)       = return (t, (OI 0))
 genExp (AExpr t (EApp f es))  = do  ps <- mapM genExp es
                                     lid <- createLLVMId
                                     addInstr (LLCall (OL lid) t f ps)
@@ -146,7 +146,7 @@ genExp (AExpr t (EAnd e1 e2)) = do  lastLabel <- getLastLabel
                                     addInstr (LLBr lfalse)
                                     addInstr (LLLabel lfalse)
                                     lid' <- createLLVMId
-                                    addInstr (LLPhi (OL lid') TBool (((OI 0),lastLabel),((OL lid),lastLabel')) )
+                                    addInstr (LLPhi (OL lid') (TBool 0) (((OI 0),lastLabel),((OL lid),lastLabel')) )
                                     return (t,(OL lid'))
 genExp (AExpr t (EOr e1 e2)) = do lastLabel <- getLastLabel
                                   (_,v1) <- genExp e1
@@ -161,11 +161,11 @@ genExp (AExpr t (EOr e1 e2)) = do lastLabel <- getLastLabel
                                   addInstr (LLBr ltrue)
                                   addInstr (LLLabel ltrue)
                                   lid' <- createLLVMId
-                                  addInstr (LLPhi (OL lid') TBool (((OI 1),lastLabel),((OL lid),lastLabel')) )
+                                  addInstr (LLPhi (OL lid') (TBool 0) (((OI 1),lastLabel),((OL lid),lastLabel')) )
                                   return (t,(OL lid'))
 genExp (AExpr t (ENeg e)) = do  (_,v) <- genExp e
                                 lid <- createLLVMId
-                                if t == TInt
+                                if t == TInt 0
                                   then addInstr (LLSub (OL lid) t (OI 0) v)
                                   else addInstr (LLSub (OL lid) t (OD 0.0) v)
                                 return (t,(OL lid))
@@ -187,7 +187,7 @@ genExp (AExpr t (EMul e1 op e2)) = do (_,v1) <- genExp e1
 genExp (AExpr _ (ERel e1@(AExpr t _) op e2)) = do (_,v1) <- genExp e1
                                                   (_,v2) <- genExp e2
                                                   lid <- createLLVMId
-                                                  if t == TInt              
+                                                  if t == TInt 0             
                                                     then case op of
                                                           Lth ->  addInstr (LLCmp (OL lid) t "slt" v1 v2)
                                                           Leq ->  addInstr (LLCmp (OL lid) t "sle" v1 v2)
@@ -202,5 +202,5 @@ genExp (AExpr _ (ERel e1@(AExpr t _) op e2)) = do (_,v1) <- genExp e1
                                                           Geq ->  addInstr (LLCmp (OL lid) t "oge" v1 v2)
                                                           Eq  ->  addInstr (LLCmp (OL lid) t "oeq" v1 v2)
                                                           Neq ->  addInstr (LLCmp (OL lid) t "one" v1 v2)
-                                                  return (TBool,(OL lid))
+                                                  return (TBool 0,(OL lid))
 genExp e = error (show e)
