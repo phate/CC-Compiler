@@ -18,6 +18,10 @@ checkDefs ((FDef f):ds) = do  fdef  <- checkFctDef f
                               ds'   <- checkDefs ds
                               return $ (FDef fdef):ds'
 
+checkDefs ((SDef s):ds) = do sdef <- checkStrDef s
+                             ds'  <- checkDefs ds
+                             return $ (SDef sdef):ds'
+
 checkFctDef :: FctDef -> S FctDef
 checkFctDef (FctDef t id args (CStmt ss)) =
    do emptyContext
@@ -28,6 +32,11 @@ checkFctDef (FctDef t id args (CStmt ss)) =
       if retOk || (t == TVoid)
         then return (FctDef t id args (CStmt ss'))
         else fail $ "Function " ++ id ++ " does not return"
+
+checkStrDef :: StrDef -> S StrDef
+checkStrDef (StrDef id decls) = 
+  do addStruct id [ (id', t) | (t, id') <- decls ]
+     return (StrDef id decls)
 
 checkStmts :: [Stmt] -> Bool -> S (Bool,[Stmt])
 checkStmts [] ret     = return (ret,[])
@@ -51,6 +60,11 @@ checkStmt (SDecl t vars) ret      = do  vars' <- mapM checkDecl vars
 checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
                                         ae <- checkExpr [t] e (show s)
                                         return (ret, SAss x es ae)
+
+checkStmt s@(SDerf x field e) ret = do (TIdent struct) <- lookupVar x
+                                       t <- lookupField field struct
+                                       ae <- checkExpr [t] e (show s)
+                                       return (ret, SDerf x field ae) -- return struct instead of x ??
                                           
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
@@ -112,11 +126,22 @@ inferExpr exp = case exp of
   EAppS fun str   -> do (ts, t) <- lookupFun fun
                         if head(ts) == TString then return (AExpr t exp) else fail $ (show exp) ++ ": Bad arguments"
 
+  ENew (TIdent id) [] -> do t <- lookupStructClass id
+                            return (AExpr t (ENew (TIdent id) []))
+
   ENew (DType t i) es -> do aes <- sequence [inferExpr e | e <- es]
                             let ts = and $ map (\(AExpr t _) -> t == (DType TInt 0)) aes
                             if ts == False
                               then fail $ (show exp) ++ " Indeces are not of type int"
-                              else return (AExpr (DType t (i+(length es))) (ENew (DType t i) aes))                        
+                              else return (AExpr (DType t (i+(length es))) (ENew (DType t i) aes))
+
+  -- TODO: Make it possible to use list->list->list;..
+  EPtr id field   -> do (TIdent struct) <- lookupVar id
+                        t <- lookupField field struct
+                        return (AExpr t (EPtr id field))   
+
+  ENull id       -> do  t <- lookupPointer id
+                        return (AExpr t (ENull id))           
  
   EIdx id es      -> do (DType t d) <- lookupVar id
                         aes <- sequence [inferExpr e | e <- es ]
@@ -152,7 +177,16 @@ inferExpr exp = case exp of
                        Minus -> do (t, ae1, ae2) <- inferBinOp e1 e2 [DType TInt 0, DType TDouble 0] (show exp)
                                    return (AExpr t (EAdd ae1 op ae2))
 
-  ERel e1 op e2   -> do case op of
+  ERel e1 op e2   -> 
+    do (AExpr e1t _) <- inferExpr e1
+       case e1t of
+         (TIdent id) -> case op of
+                          Eq  -> do (t, ae1, ae2) <- inferBinOp e1 e2 [e1t] (show exp)
+                                    return (AExpr (DType TBool 0) (ERel ae1 op ae2))
+                          Neq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [e1t] (show exp)
+                                    return (AExpr (DType TBool 0) (ERel ae1 op ae2))
+                          _   -> fail $ (show exp) ++ ": Not a valid relational operator"
+         _           -> case op of
                           Lth -> do (t, ae1, ae2) <- inferBinOp e1 e2 [DType TInt 0, DType TDouble 0] (show exp)
                                     return (AExpr (DType TBool 0) (ERel ae1 op ae2))
                           Leq -> do (t, ae1, ae2) <- inferBinOp e1 e2 [DType TInt 0, DType TDouble 0] (show exp)
