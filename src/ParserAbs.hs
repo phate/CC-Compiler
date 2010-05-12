@@ -3,15 +3,40 @@ module ParserAbs where
 type Id = String
 
 data Program =
-  Program [FctDef]
+  Program [Def]
+  deriving Show
+
+data Def =
+    FDef FctDef
+  | SDef StrDef
+  | TDef TypeDef
+  | CDef ClassDef
+  deriving Show
+
+data ClassDef =
+    ClassDef Id [CDecl]
+  | EClassDef Id Id [CDecl]
+  deriving Show
+
+data CDecl =
+    CDeclM FctDef
+  | CDeclA DType [Item]
+  deriving Show
+
+data TypeDef =
+  TypeDef Id Id
+  deriving Show
+
+data StrDef =
+  StrDef Id [(DType,Id)]
   deriving Show
 
 data FctDef =
-  FctDef Type Id [Arg] CmpStmt
+  FctDef DType Id [Arg] CmpStmt
   deriving Show
 
 data Arg =
-  Arg Type Id
+  Arg DType Id
   deriving Show
 
 data CmpStmt =
@@ -21,7 +46,7 @@ data CmpStmt =
 data Stmt =
     SEmpty
   | SCStmt CmpStmt
-  | SDecl Type [Item]
+  | SDecl DType [Item]
   | SAss Id [Expr] Expr
   | SIncr Id
   | SDecr Id
@@ -31,6 +56,7 @@ data Stmt =
   | SIfElse Expr Stmt Stmt
   | SWhile Expr Stmt
   | SExp Expr
+  | SDerf Id Id Expr
   deriving Show
 
 data Item =
@@ -38,13 +64,20 @@ data Item =
   | Init Id Expr
   deriving Show
 
-data Type =
-    TInt Int
-  | TDouble Int
-  | TBool Int
+data DType =
+    DType Type Int
+  | TIdent Id
   | TVoid
-	| TString
-  | TStringP
+  | TString
+  deriving (Eq, Show)
+
+data Type =
+    TInt
+  | TDouble
+  | TBool
+--  | TVoid
+--	| TString
+--  | TStringP
   deriving (Eq, Show)
 
 data Expr =
@@ -57,15 +90,18 @@ data Expr =
   | EAppS Id String
   | EIdx Id [Expr]
   | EDot Id Id
+  | EPtr Id Id
+  | ESelf Id
+  | ENull Expr
   | ENeg Expr
   | ENot Expr
-  | ENew Type [Expr]
+  | ENew DType [Expr]
   | EMul Expr MulOp Expr
   | EAdd Expr AddOp Expr
   | ERel Expr RelOp Expr
   | EAnd Expr Expr
   | EOr Expr Expr
-  | AExpr Type Expr
+  | AExpr DType Expr
   deriving Show
 
 data AddOp =

@@ -17,12 +17,12 @@ import LLVMEnv
 check :: String -> String -> IO ()
 check s file =  let tree = parse $ alexScanTokens s in
     case typecheck tree of
-    Ok (p,env) -> do
+    Ok (p,tcenv) -> do
                     hPutStrLn stderr "OK"
                     putStrLn (show p)
-                    --let envs = generateInstructions p
-                    --let code = getCode envs
-                    --writeFile (file ++ ".ll") code
+                    let llvmenv = generateInstructions p
+                    let code = getCode llvmenv
+                    writeFile (file ++ ".ll") code
                     --system $ "llvm-as -f " ++ file ++ ".ll" ++ "&& llvm-ld lib/Runtime.bc " ++ file ++ ".bc" ++ "&& mv a.out* " ++ (dropFileName file)
                     --system $ "java -jar lib/jasmin.jar " ++ file ++ ".j" ++ " && mv " ++ (takeFileName file) ++ ".class " ++ file ++ ".class" 
                     return ()

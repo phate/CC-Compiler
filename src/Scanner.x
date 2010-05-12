@@ -18,10 +18,15 @@ tokens :-
 	else																		{ \s -> TElse }
 	while																		{ \s -> TWhile }
 	return																	{ \s -> TReturn }
-	true																		{ \s -> TTrue }
+	struct                                  { \s -> TStruct }
+  typedef                                 { \s -> TTypeDef }
+  class                                   { \s -> TClass }
+  extends                                 { \s -> TExtends }
+  self                                    { \s -> TSelf }
+  null                                    { \s -> TNull }
+  true																		{ \s -> TTrue }
 	false																		{ \s -> TFalse }
   new                                     { \s -> TNew }
-  length                                  { \s -> TLength }
 	int																			{ \s -> TTInt }
 	double																	{ \s -> TTDouble }
 	boolean																	{ \s -> TTBool }
@@ -56,3 +61,4 @@ tokens :-
 	\>\=																		{ \s -> TGeq }
 	\=\=																		{ \s -> TEq }
 	\!\=																		{ \s -> TNeq }
+  \-\>                                    { \s -> TDerf }

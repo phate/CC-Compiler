@@ -6,31 +6,31 @@ type LLVMId = String
 type Label = String
 
 data Op =
-    OL LLVMId
-  | OI Integer
-  | OD Double
+    OId LLVMId
+  | OInteger Integer
+  | ODouble Double
   deriving (Eq, Show)
 
 data LLVMInstr =
-    LLAdd Op Type Op Op
-  | LLSub Op Type Op Op
-  | LLMul Op Type Op Op
-  | LLDiv Op Type Op Op
-  | LLRem Op Type Op Op
+    LLAdd Op DType Op Op
+  | LLSub Op DType Op Op
+  | LLMul Op DType Op Op
+  | LLDiv Op DType Op Op
+  | LLRem Op DType Op Op
   | LLAnd Op Op Op
   | LLOr Op Op Op
   | LLXor Op Op Op
-  | LLCmp Op Type String Op Op
-  | LLLoad Op Type LLVMId
-  | LLStore Type Op Op
-  | LLReturn Type Op
+  | LLCmp Op DType String Op Op
+  | LLLoad Op DType LLVMId
+  | LLStore DType Op Op
+  | LLReturn DType Op
   | LLVReturn
-  | LLAlloc Op Type
+  | LLAlloc Op DType
   | LLBr Label
   | LLLabel Label
   | LLCBr Op Label Label 
-  | LLCall Op Type LLVMId [(Type,Op)]
-  | LLGetElemPtr Op Int Type LLVMId
-  | LLPhi Op Type ((Op,Label),(Op,Label))
+  | LLCall Op DType LLVMId [(DType,Op)]
+  | LLGetElemPtr Op Int DType LLVMId
+  | LLPhi Op DType ((Op,Label),(Op,Label))
   | Unreachable
   deriving (Eq, Show)
