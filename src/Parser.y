@@ -69,20 +69,18 @@ Def         : FctDef                                        { FDef $1 }
 ClassDef    : 'class' id '{' ListCDecl '}' ';'              { ClassDef $2 $4 }
             | 'class' id 'extends' id '{' ListCDecl '}' ';' { EClassDef $2 $4 $6 }
 ListCDecl   : FctDef                                        { (:[]) (CDeclM $1) }
-            | ListStrDecl ';'                              	{ (:[]) (CDeclA $1) }
-            | ListCDecl FctDef                           		{ (:) (CDeclM $2) $1 }
-            | ListCDecl ListStrDecl ';'                   	{ (:) (CDeclA $2) $1 }
+            | TId ';'                              	        { (:[]) (CDeclA $1) }
+            | ListCDecl FctDef                              { (:) (CDeclM $2) $1 }
+            | ListCDecl TId ';'                       	    { (:) (CDeclA $2) $1 }
 TypeDef     : 'typedef' 'struct' id '*' id ';'              { TypeDef $3 $5 }
-StrDef      : 'struct' id '{' ListStrDecl ';' '}' ';'      	{ StrDef $2 $4 }
-ListStrDecl : Type ListId                               		{ map (\id -> ($1,id)) $2 }
-            | ListStrDecl ';' Type ListId									  { (map (\id -> ($3,id)) $4) ++ $1 }
-ListId      : id                                            { (:[]) $1 }
-            | id ',' ListId                                 { (:) $1 $3 }
-FctDef			: Type id '(' ListArg ')' CmpStmt		            { FctDef $1 $2 $4 $6 }
-ListArg			: {- empty -}													          { [] }
-						| Arg																	          { (:[]) $1 }
-						| Arg ',' ListArg 										          { (:) $1 $3 }
-Arg					: Type id															          { Arg $1 $2 }
+StrDef      : 'struct' id '{' ListTId '}' ';'               { StrDef $2 $4 }
+ListTId     : TId ';'                                       { (:[]) $1 }
+            | TId ';' ListTId                               { (:) $1 $3 }
+FctDef			: TId '(' LListArg ')' CmpStmt		              { FctDef (fst $1) (snd $1) $3 $5 }
+LListArg    : {- empty -}                                   { [] }
+            | ListArg                                       { $1 }                  
+ListArg			: TId																	          { (:[]) (Arg (fst $1) (snd $1)) }
+						| TId ',' ListArg 										          { (:) (Arg (fst $1) (snd $1)) $3 }
 CmpStmt			: '{' ListStmt '}'										          { CStmt (reverse $2) }
 ListStmt		: {- empty -}													          { [] } 
 						| ListStmt Stmt												          { flip (:) $1 $2 }
@@ -103,14 +101,15 @@ ListItem		: Item																          { (:[]) $1 }
 						| Item ',' ListItem 									          { (:) $1 $3 }
 Item				: id																	          { NoInit $1 }
 						| id '=' Expr													          { Init $1 $3 }
-Type				: 'int' ListSB												          { DType TInt $2 }
-						|	'double' ListSB											          { DType TDouble $2 }
-						| 'boolean' ListSB										          { DType TBool $2 }
-						| 'void'															          { TVoid }
-						| id																						{ TIdent $1 }
-PType       : 'int'                                         { DType TInt 0 }
-            | 'double'                                      { DType TDouble 0 }
-            | 'boolean'                                     { DType TBool 0 }
+TId				  : 'int' ListSB id												        { (DType TInt $2,$3) }
+						|	'double' ListSB id											      { (DType TDouble $2,$3) }
+						| 'boolean' ListSB id										        { (DType TBool $2,$3) }
+						| 'void' id															        { (TVoid,$2) }
+						| id id																				  { (TIdent $1,$2) }
+Type        : 'int' ListSB                                  { DType TInt $2 }
+            | 'double' ListSB                               { DType TDouble $2 }
+            | 'boolean' ListSB                              { DType TBool $2 }
+            | 'void'                                        { TVoid }
 						|	id 																						{ TIdent $1 }
 ListSB      : {- empty -}                                   { 0 }
             | '['']' ListSB                                 { (+1) $3 }
@@ -124,14 +123,14 @@ Expr3				: Expr3 AddOp Expr4										          { EAdd $1 $2 $3 }
 						| Expr4																          { $1 }
 Expr4				: Expr4 MulOp	Expr5										          { EMul $1 $2 $3 }
 						| Expr5																          { $1 }
-Expr5       : 'new' PType ListIdx                           { ENew $2 $3 }                         
+Expr5       : 'new' 'int' ListIdx                           { ENew (DType TInt 0) $3 }                         
             | Expr6                                         { $1 }
 Expr6				: '!' Expr7														          { ENot $2 }
 						| '-' Expr7														          { ENeg $2 }
 						| Expr7																          { $1 }
 Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
             | 'self' '.' Expr8                              { ESelf $3 }
-            | Expr7 '->' id                                 { EPtr $1 $3 }
+            | id '->' id                                    { EPtr $1 $3 }
             | Expr8                                         { $1 }
 Expr8				: id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
@@ -161,7 +160,7 @@ RelOp				: '<'																	          { Lth }
 {
 
 parseError :: [Token] -> a
-parseError _ = error "Parse error"
+parseError ts = error $ "Parse error" ++ (show ts) 
 
 data Token
 	= TId	String
