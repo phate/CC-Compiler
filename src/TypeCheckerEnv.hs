@@ -16,8 +16,8 @@ type Struct     = [(Id, DType)]
 type Structs    = Map Id Struct
 type PtrTypeDefs = Map Id Id -- Maps a type defined pointer to the corresponding struct
 
-type Classes    = Map Id [DType] -- CHANGE THIS LATER
-	
+--type Classes    = Map Id [DType] -- CHANGE THIS LATER
+
 type ErrStr  = String
 type Types   = [DType]
 type RetType = DType
@@ -37,20 +37,29 @@ addPredefFuns sig   = insert "printInt" ([DType TInt 0], TVoid)
                     $ insert "printDouble" ([DType TDouble 0], TVoid)
                     $ insert "printString" ([TString], TVoid)
                     $ insert "readInt" ([], DType TInt 0)
-                    $ insert "readDouble" ([], DType TDouble 0) sig                     
+                    $ insert "readDouble" ([], DType TDouble 0) sig
+
+data TCClassEnv = TCClassEnv
+  {
+    methods :: TCFctEnv,
+    attributes :: Map Id DType
+  }
+
+newTCClassEnv :: TCClassEnv
+newTCClassEnv = TCClassEnv { methods = newTCFctEnv, attributes = empty }
 
 data TCEnv = TCEnv
   {
     tcFctEnv :: TCFctEnv,
     structs :: Structs,
     ptrTypeDefs :: PtrTypeDefs,
-    classes :: Classes  
+    tcClassEnv :: Map Id TCClassEnv  
   }
 
 type S a = StateT TCEnv Err a
 
 newTCEnv :: TCEnv
-newTCEnv = TCEnv { tcFctEnv = newTCFctEnv, structs = empty, ptrTypeDefs = empty, classes = empty }
+newTCEnv = TCEnv { tcFctEnv = newTCFctEnv, structs = empty, ptrTypeDefs = empty, tcClassEnv = empty }
 
 lookupFun :: Id -> S ([DType], DType)
 lookupFun id = do s <- get
@@ -104,20 +113,46 @@ lookupVar x = do s <- get
                                          Just typ -> return typ
 
 addFun :: Id -> ([DType], DType) -> S ()
-addFun id (ps,rt) = do s <- get
-                       let (sig, cont) = env $ tcFctEnv s
-		       ps' <- mapM resolveType ps
-		       rt' <- resolveType rt
-                       case member id sig of
-                        True  -> fail $ "Function " ++ id ++ " multiply declared"
-                        False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (insert id (ps',rt') sig, cont) } }
+addFun id (ps,rt) = do  s <- get
+                        let (sig, cont) = env $ tcFctEnv s
+                        ps' <- mapM resolveType ps
+                        rt' <- resolveType rt
+                        case member id sig of
+                          True  -> fail $ "Function " ++ id ++ " multiple declared"
+                          False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (insert id (ps',rt') sig, cont) } }
 
+
+addClass :: Id -> S()
+addClass id = do  s <- get
+                  put $ s { tcClassEnv = insert id newTCClassEnv (tcClassEnv s) }
+                  
+{-
+addMethod :: Id -> Id -> ([DType],DType) -> S()
+addMethod cid mid (ps,rt) = do  s <- get
+                                let cenv = 
+                                case Data.Map.lookup cid $ tcClassEnv s of
+                                  Nothing -> fail $ "Class " ++ cid ++ " not declared"
+                                  Just r  -> do let mths = methods $ r
+                                                let (sig, const) = env $ mths
+                                                ps' <- mapM resolveType ps
+                                                rt' <- resolveType rt
+                                                case member mid sig of
+                                                  True  -> fail $ "Function " ++ mid ++ " multiple declared"
+                                                  False -> put $ s { tcClassEnv = (tcClassEnv s){ methods = mths { env = (insert mid (ps',rt') sig, const) } } }
+--                                let (sig, cont) = env $ methods $ Data.Map.lookup cid $ tcClassEnv s
+--                                ps' <- mapM resolveType ps
+--                                rt' <- resolveType rt
+--                                case member id sig of
+--                                  True  -> fail $ "Function " ++ id ++ " multiple declared" 
+--                                  False -> put $ s { tcClassEnv = (tcClassEnv s){ methods = (methods $ tcClassEnv s){ env = (insert id (ps',rt') sig, cont) } } }
 
 -- This function is used for ENew
+-}
+
 lookupStructClass :: Id -> S DType
 lookupStructClass id = do s <- get
                           let strDefs = structs s
-                          let classDefs = classes s
+                          let classDefs = tcClassEnv s
                           case Data.Map.lookup id strDefs of
                             Just s  -> return (TIdent id)
                             Nothing -> case Data.Map.lookup id classDefs of 
@@ -128,7 +163,7 @@ lookupStructClass id = do s <- get
 lookupPointer :: Id -> S DType
 lookupPointer id = do s <- get
                       let ptrDefs = ptrTypeDefs s
-                      let classDefs = classes s
+                      let classDefs = tcClassEnv s
                       case Data.Map.lookup id ptrDefs of
                          Just s  -> return (TIdent s)
                          Nothing -> case Data.Map.lookup id classDefs of

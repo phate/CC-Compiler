@@ -32,12 +32,16 @@ checkDefs ((FDef f):ds) = do  fdef  <- checkFctDef f
                               ds'   <- checkDefs ds
                               return $ (FDef fdef):ds'
 
-checkDefs ((SDef s):ds) = do sdef <- checkStrDef s
-                             ds'  <- checkDefs ds
-                             return $ (SDef sdef):ds'
+checkDefs ((SDef s):ds) = do  sdef <- checkStrDef s
+                              ds'  <- checkDefs ds
+                              return $ (SDef sdef):ds'
 
-checkDefs (d:ds)        = do ds' <- checkDefs ds
-                             return $ d:ds'
+--checkDefs ((CDef c):ds) = do  cdef <- checkClassDef s
+--                              ds' <- checkDefs ds
+--                              return $ (CDef cdef):ds'
+
+checkDefs (d:ds)        = do  ds' <- checkDefs ds
+                              return $ d:ds'
 
 
 checkStrDef :: StrDef -> S StrDef
