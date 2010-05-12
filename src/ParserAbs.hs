@@ -89,9 +89,9 @@ data Expr =
   | EApp Id [Expr]
   | EAppS Id String
   | EIdx Id [Expr]
-  | EDot Id Id
-  | EPtr Id Id
-  | ESelf Id
+  | EDot Expr Expr
+  | EPtr Expr Id
+  | ESelf Expr
   | ENull Id
   | ENeg Expr
   | ENot Expr

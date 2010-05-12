@@ -128,9 +128,9 @@ Expr5       : 'new' PType ListIdx                           { ENew $2 $3 }
 Expr6				: '!' Expr7														          { ENot $2 }
 						| '-' Expr7														          { ENeg $2 }
 						| Expr7																          { $1 }
-Expr7       : id '.' id                                     { EDot $1 $3 }
-            | 'self' '.' id                                 { ESelf $3 }
-            | id '->' id                                    { EPtr $1 $3 }
+Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
+            | 'self' '.' Expr8                              { ESelf $3 }
+            | Expr7 '->' id                                 { EPtr $1 $3 }
             | Expr8                                         { $1 }
 Expr8				: id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
