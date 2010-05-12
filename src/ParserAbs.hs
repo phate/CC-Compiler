@@ -20,7 +20,7 @@ data ClassDef =
 
 data CDecl =
     CDeclM FctDef
-  | CDeclA [(DType,Id)]
+  | CDeclA (DType,Id)
   deriving Show
 
 data TypeDef =
@@ -90,7 +90,7 @@ data Expr =
   | EAppS Id String
   | EIdx Id [Expr]
   | EDot Expr Expr
-  | EPtr Expr Id
+  | EPtr Id Id
   | ESelf Expr
   | ENull Id
   | ENeg Expr
