@@ -70,7 +70,8 @@ getReturnType = do  s <- get
 
 setReturnType :: RetType -> S ()
 setReturnType t = do s <- get
-                     put $ s { tcFctEnv = (tcFctEnv s) { retType = t } }
+		     t' <- resolveType t
+                     put $ s { tcFctEnv = (tcFctEnv s) { retType = t' } }
 
 pushScope :: S ()
 pushScope = do s <- get
@@ -87,7 +88,9 @@ addVar typ x =
   do s <- get
      let (sig, (scope:rest)) = env $ tcFctEnv s
      case member x scope of
-       False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x typ scope):rest)) } }
+       False -> do
+		  typ' <- resolveType typ               
+                  put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x typ' scope):rest)) } }
        True  -> fail $ "Variable " ++ x ++ " was already declared in this scope"
 
 lookupVar :: Id -> S DType
@@ -101,11 +104,13 @@ lookupVar x = do s <- get
                                          Just typ -> return typ
 
 addFun :: Id -> ([DType], DType) -> S ()
-addFun id typs = do s <- get
-                    let (sig, cont) = env $ tcFctEnv s
-                    case member id sig of
-                      True  -> fail $ "Function " ++ id ++ " multiply declared"
-                      False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (insert id typs sig, cont) } }
+addFun id (ps,rt) = do s <- get
+                       let (sig, cont) = env $ tcFctEnv s
+		       ps' <- mapM resolveType ps
+		       rt' <- resolveType rt
+                       case member id sig of
+                        True  -> fail $ "Function " ++ id ++ " multiply declared"
+                        False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (insert id (ps',rt') sig, cont) } }
 
 
 -- This function is used for ENew
@@ -132,14 +137,14 @@ lookupPointer id = do s <- get
 
 -- Returns the type of a field in a struct
 lookupField :: Id -> Id -> S DType
-lookupField id field = 
+lookupField field id = 
   do s <- get
      let strDefs = structs s
      case Data.Map.lookup id strDefs of
        Nothing -> fail $ id ++ ": No such struct exists"
        Just s  -> case Prelude.lookup field s of
          Nothing -> fail $ "Field " ++ field ++ " not found in " ++ id
-         Just t  -> return t
+         Just t  -> resolveType t
 
 -- Adds a struct to "structs" in environment
 addStruct :: Id -> [(Id, DType)] -> S ()
@@ -155,7 +160,16 @@ addPtrTypeDef str ptr =
   do s <- get
      let ptrDefs = ptrTypeDefs s
      let strDefs = structs s
-     case member str strDefs of
-       True -> put $ s { ptrTypeDefs = (insert ptr str ptrDefs) }
-       False -> fail $ "Can't create pointer type definition \"" ++
+     case member ptr ptrDefs of
+       True -> fail $ "Pointer type definition " ++ ptr ++ " multiply declared"
+       False -> case member str strDefs of
+                  True -> put $ s { ptrTypeDefs = (insert ptr str ptrDefs) }
+                  False -> fail $ "Can't create pointer type definition \"" ++
                          ptr ++ "\" to undefined struct \"" ++ str ++ "\""
+
+
+resolveType :: DType -> S DType
+resolveType t = case t of 
+                  TIdent i -> do t' <- lookupPointer i
+                                 return t'
+                  _        -> return t

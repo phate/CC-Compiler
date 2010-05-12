@@ -6,8 +6,22 @@ import Control.Monad.State
 import ErrM
 
 typecheck :: Program -> Err (Program, TCEnv)
-typecheck (Program defs) = do (defs', env) <- runStateT (checkDefs defs) newTCEnv
+typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEnv
                               return ((Program defs'), env)
+
+setupDefs :: [Def] -> S [Def]
+setupDefs ds = do mapM_ insertStruct [ s | (SDef s) <- ds ]
+                  mapM_ insertTypeDef [ td | (TDef td) <- ds ]
+                  mapM_ insertClass [ (ClassDef id cdecls) | (CDef (ClassDef id cdecls)) <- ds ]
+                  mapM_ insertSubClass [ (EClassDef sub base cdecls) | (CDef (EClassDef sub base cdecls)) <- ds ]
+                  mapM_ insertFunction [ f | (FDef f) <- ds ]
+                  checkDefs ds
+	where  
+               insertStruct (StrDef id decls)             = addStruct id [ (id', t) | (t, id') <- decls ]
+               insertTypeDef (TypeDef struct ptr)         = addPtrTypeDef struct ptr
+               insertClass (ClassDef id cdecls)           = return ()
+               insertSubClass (EClassDef sub base cdecls) = return ()
+               insertFunction (FctDef t id args ss)       = addFun id ([t' | (Arg t' id') <- args], t)
 
 checkDefs :: [Def] -> S [Def]
 checkDefs []            = do  mainFun <- lookupFun "main"
@@ -22,21 +36,30 @@ checkDefs ((SDef s):ds) = do sdef <- checkStrDef s
                              ds'  <- checkDefs ds
                              return $ (SDef sdef):ds'
 
+checkDefs (d:ds)        = do ds' <- checkDefs ds
+                             return $ d:ds'
+
+
+checkStrDef :: StrDef -> S StrDef
+checkStrDef (StrDef id decls) = 
+  do emptyContext
+     (_,decls') <- checkStmts [ SDecl t [NoInit id'] | (t, id') <- decls ] True
+     let decls'' = [ (t, id') | (SDecl t [NoInit id']) <- decls' ]
+     return (StrDef id decls'')
+                                    
+
 checkFctDef :: FctDef -> S FctDef
 checkFctDef (FctDef t id args (CStmt ss)) =
    do emptyContext
       setReturnType t
-      addFun id ([t' | (Arg t' id') <- args], t)
       mapM_ (\(t,x) -> addVar t x) [(t',id') | (Arg t' id') <- args]
+      (ps,rt) <- lookupFun id
+      let args' = zipWith Arg ps [ id | (Arg _ id) <- args]
       (retOk, ss') <- checkStmts ss False
       if retOk || (t == TVoid)
-        then return (FctDef t id args (CStmt ss'))
+        then return (FctDef rt id args' (CStmt ss'))
         else fail $ "Function " ++ id ++ " does not return"
 
-checkStrDef :: StrDef -> S StrDef
-checkStrDef (StrDef id decls) = 
-  do addStruct id [ (id', t) | (t, id') <- decls ]
-     return (StrDef id decls)
 
 checkStmts :: [Stmt] -> Bool -> S (Bool,[Stmt])
 checkStmts [] ret     = return (ret,[])
@@ -50,11 +73,13 @@ checkStmt (SCStmt (CStmt ss)) ret = do  pushScope
                                         (ret', ss') <- checkStmts ss ret
                                         popScope
                                         return ( ret || ret', SCStmt (CStmt ss'))
-checkStmt (SDecl t vars) ret      = do  vars' <- mapM checkDecl vars
-                                        return (ret, (SDecl t vars')) where
+checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
+                                        vars' <- mapM checkDecl vars
+                                        return (ret, (SDecl t' vars')) where
                                           checkDecl (NoInit id)     = do  addVar t id
                                                                           return (NoInit id)
-                                          checkDecl x@(Init id exp) = do  ae <- checkExpr [t] exp (show x)
+                                          checkDecl x@(Init id exp) = do  t' <- resolveType t
+									  ae <- checkExpr [t'] exp (show x)
                                                                           addVar t id
                                                                           return (Init id ae)
 checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
@@ -64,7 +89,7 @@ checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
 checkStmt s@(SDerf x field e) ret = do (TIdent struct) <- lookupVar x
                                        t <- lookupField field struct
                                        ae <- checkExpr [t] e (show s)
-                                       return (ret, SDerf x field ae) -- return struct instead of x ??
+                                       return (ret, SDerf x field ae)
                                           
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
@@ -152,10 +177,10 @@ inferExpr exp = case exp of
                                 then fail $ (show exp) ++ " Indeces are not of type int"
                                 else return (AExpr (DType t (d-(length es))) (EIdx id aes))  
 
-  EDot x "length" -> do (DType t d) <- lookupVar x
-                        if d <= 0
-                          then fail $ x ++ " is not an array"
-                          else return (AExpr (DType TInt 0) exp)
+--  EDot x "length" -> do (DType t d) <- lookupVar x
+--                        if d <= 0
+--                          then fail $ x ++ " is not an array"
+--                          else return (AExpr (DType TInt 0) exp)
 
   ENeg e          -> do ae@(AExpr t _) <- checkExpr [DType TInt 0, DType TDouble 0] e (show exp)
                         return (AExpr t (ENeg ae))
