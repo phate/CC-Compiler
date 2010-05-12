@@ -29,7 +29,7 @@ newFctEnv = FctEnv { funName = "", returnType = TVoid, params = [], instr = [LLL
 data LLVMEnv = LLVMEnv
   {
     fctEnv :: [FctEnv],
-    globStrings :: [(LLVMId, String)]
+    globStrings :: [(LLVMId, String)],
     globArrayTypes :: Map DType LLVMId
   }
   deriving Show

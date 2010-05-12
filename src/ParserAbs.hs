@@ -20,7 +20,7 @@ data ClassDef =
 
 data CDecl =
     CDeclM FctDef
-  | CDeclA DType [Item]
+  | CDeclA [(DType,Id)]
   deriving Show
 
 data TypeDef =
@@ -92,7 +92,7 @@ data Expr =
   | EDot Id Id
   | EPtr Id Id
   | ESelf Id
-  | ENull Expr
+  | ENull Id
   | ENeg Expr
   | ENot Expr
   | ENew DType [Expr]
