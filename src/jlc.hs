@@ -15,7 +15,7 @@ import ErrM
                          
 
 check :: String -> String -> IO ()
-check s file =  let tree = parse $ alexScanTokens s in
+check s file = let tree = parse $ alexScanTokens s in
     case typecheck tree of
     Ok (p,tcenv) -> do
                     hPutStrLn stderr "OK"

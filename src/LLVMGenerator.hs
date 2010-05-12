@@ -124,6 +124,13 @@ genExp (AExpr t (EAppS f str))  = do  id <- addGlobString str
                                       return (TVoid,(OId f))
 
 genExp (AExpr (TIdent _) (ENew _ _))  = undefined -- allocate for structs (classes are transformed to structs)
+
+genExp (AExpr t (ENew id)) = do lid <- createLLVMId
+                                size <- getStructSize t
+                                addInstr (LLCall (OL lid) TPtr8 "calloc" [(TInt, OI size), (TInt, OI 1)])
+                                lid' <- createLLVMId
+                                addInstr (LLBitcast (OL lid') TPtr8 (OL lid) t)
+                                return (t, (OL lid'))
   
 genExp (AExpr (DType _ _) (ENew _ es)) = undefined -- allocate arrays
 

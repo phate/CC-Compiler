@@ -69,13 +69,13 @@ Def         : FctDef                                        { FDef $1 }
 ClassDef    : 'class' id '{' ListCDecl '}' ';'              { ClassDef $2 $4 }
             | 'class' id 'extends' id '{' ListCDecl '}' ';' { EClassDef $2 $4 $6 }
 ListCDecl   : FctDef                                        { (:[]) (CDeclM $1) }
-            | ListStrDecl ';'                               { (:[]) (CDeclA $1) }
-            | FctDef ListCDecl                              { (:) (CDeclM $1) $2 }
-            | ListStrDecl ';' ListCDecl                     { (:) (CDeclA $1) $3 }
+            | ListStrDecl ';'                              	{ (:[]) (CDeclA $1) }
+            | ListCDecl FctDef                           		{ (:) (CDeclM $2) $1 }
+            | ListCDecl ListStrDecl ';'                   	{ (:) (CDeclA $2) $1 }
 TypeDef     : 'typedef' 'struct' id '*' id ';'              { TypeDef $3 $5 }
-StrDef      : 'struct' id '{' ListStrDecl ';' '}' ';'       { StrDef $2 $4 }
-ListStrDecl : Type ListId                                   { map (\id -> ($1,id)) $2 }
-            | Type ListId ';' ListStrDecl                   { (map (\id -> ($1,id)) $2) ++ $4 }
+StrDef      : 'struct' id '{' ListStrDecl ';' '}' ';'      	{ StrDef $2 $4 }
+ListStrDecl : Type ListId                               		{ map (\id -> ($1,id)) $2 }
+            | ListStrDecl ';' Type ListId									  { (map (\id -> ($3,id)) $4) ++ $1 }
 ListId      : id                                            { (:[]) $1 }
             | id ',' ListId                                 { (:) $1 $3 }
 FctDef			: Type id '(' ListArg ')' CmpStmt		            { FctDef $1 $2 $4 $6 }
@@ -107,10 +107,11 @@ Type				: 'int' ListSB												          { DType TInt $2 }
 						|	'double' ListSB											          { DType TDouble $2 }
 						| 'boolean' ListSB										          { DType TBool $2 }
 						| 'void'															          { TVoid }
+						| id																						{ TIdent $1 }
 PType       : 'int'                                         { DType TInt 0 }
             | 'double'                                      { DType TDouble 0 }
             | 'boolean'                                     { DType TBool 0 }
-            | id                                            { TIdent $1 }
+						|	id 																						{ TIdent $1 }
 ListSB      : {- empty -}                                   { 0 }
             | '['']' ListSB                                 { (+1) $3 }
 Expr				: Expr1 '||' Expr										  	        { EOr $1 $3 }
