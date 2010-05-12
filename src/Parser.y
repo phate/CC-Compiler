@@ -69,13 +69,15 @@ Def         : FctDef                                        { FDef $1 }
 ClassDef    : 'class' id '{' ListCDecl '}' ';'              { ClassDef $2 $4 }
             | 'class' id 'extends' id '{' ListCDecl '}' ';' { EClassDef $2 $4 $6 }
 ListCDecl   : FctDef                                        { (:[]) (CDeclM $1) }
-            | Type ListItem                                 { (:[]) (CDeclA $1 $2) }
+            | ListStrDecl ';'                               { (:[]) (CDeclA $1) }
             | FctDef ListCDecl                              { (:) (CDeclM $1) $2 }
-            | Type ListItem ListCDecl                       { (:) (CDeclA $1 $2) $3 }
+            | ListStrDecl ';' ListCDecl                     { (:) (CDeclA $1) $3 }
 TypeDef     : 'typedef' 'struct' id '*' id ';'              { TypeDef $3 $5 }
-StrDef      : 'struct' id '{' ListStrDecl '}' ';'           { StrDef $2 $4 }
-ListStrDecl : Type id ';'                                   { (:[]) ($1,$2) }
-            | Type id ';' ListStrDecl                       { (:) ($1,$2) $4 }
+StrDef      : 'struct' id '{' ListStrDecl ';' '}' ';'       { StrDef $2 $4 }
+ListStrDecl : Type ListId                                   { map (\id -> ($1,id)) $2 }
+            | Type ListId ';' ListStrDecl                   { (map (\id -> ($1,id)) $2) ++ $4 }
+ListId      : id                                            { (:[]) $1 }
+            | id ',' ListId                                 { (:) $1 $3 }
 FctDef			: Type id '(' ListArg ')' CmpStmt		            { FctDef $1 $2 $4 $6 }
 ListArg			: {- empty -}													          { [] }
 						| Arg																	          { (:[]) $1 }
@@ -137,7 +139,7 @@ Expr8				: id '(' string ')'										          { EAppS $1 (take ((length $3) - 
 						| double															          { EDouble $1 }
 						| integer															          { EInteger $1 }
 						| id ListIdx													          { if null $2 then EId $1 else EIdx $1 $2 }
-            | '(' Expr ')' 'null'                           { ENull $2 }
+            | '(' id ')' 'null'                             { ENull $2 }
 						| '(' Expr ')'												          { $2 }
 ListIdx     : {- empty -}                                   { [] }
             | '[' Expr ']' ListIdx                          { (:) $2 $4 }
