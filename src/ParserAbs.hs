@@ -56,7 +56,7 @@ data Stmt =
   | SIfElse Expr Stmt Stmt
   | SWhile Expr Stmt
   | SExp Expr
-  | SDerf Id Id Expr
+  | SDerf Expr Id Expr
   deriving Show
 
 data Item =
@@ -69,6 +69,7 @@ data DType =
   | TIdent Id
   | TVoid
   | TString
+  | TPtr8
   deriving (Eq, Show)
 
 data Type =
@@ -90,8 +91,8 @@ data Expr =
   | EAppS Id String
   | EIdx Id [Expr]
   | EDot Expr Expr
-  | EPtr Id Id
-  | ESelf Expr
+  | EPtr Expr Id
+  | ESelf
   | ENull Id
   | ENeg Expr
   | ENot Expr

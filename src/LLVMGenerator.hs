@@ -8,9 +8,18 @@ import Control.Monad.State
 generateInstructions :: Program -> LLVMEnv
 generateInstructions (Program defs) = execState (genDefs defs) newLLVMEnv
 
+
 genDefs :: [Def] -> S()
-genDefs []            = return ()
-genDefs ((FDef f):ds) = genFctDef f
+genDefs defs = do mapM_ insertStruct [ s | (SDef s) <- defs ]
+                  mapM_ genFctDef [ f | (FDef f) <- defs ]
+                  return ()
+  where
+    insertStruct (StrDef id decls) = addStruct id [ (id', t) | (t, id') <- decls ]
+
+
+--genDefs :: [Def] -> S()
+--genDefs []            = return ()
+--genDefs ((FDef f):ds) = genFctDef f
 
 genFctDef :: FctDef -> S()
 genFctDef (FctDef t id args (CStmt ss)) = do  let ps = [ (t,i) | Arg t i <- args]
@@ -43,6 +52,16 @@ genStmt SVRet               = do  addInstr LLVReturn
 genStmt (SAss x _ e)        = do  (lid,t) <- lookupVar x
                                   (_,v) <- genExp e
                                   addInstr (LLStore t v (OId lid))
+
+genStmt (SDerf e1 field e2) = do (t@(TIdent id),v) <- genExp e1
+                                 fOff <- getFieldOffset field id
+                                 lid' <- createLLVMId
+                                 addInstr (LLGetElemPtr (OId lid') t v (DType TInt 0) (OInteger fOff))
+                                 (t',v') <- genExp e2
+                                 addInstr (LLStore t' v' (OId lid'))
+
+
+
 genStmt (SDecl t vs) = do   mapM_ genDecl vs
                             where
                               genDecl (NoInit x) = do lid <- addVar x t
@@ -51,6 +70,7 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                                                         DType TInt 0    -> addInstr (LLStore t (OInteger 0) (OId lid))
                                                         DType TDouble 0 -> addInstr (LLStore t (ODouble 0.0) (OId lid))
                                                         DType TBool 0   -> addInstr (LLStore t (OInteger 0) (OId lid))
+                                                        TIdent i        -> addInstr (LLStore t ONull (OId lid))
                               genDecl (Init x e) = do (_,v) <- genExp e
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OId lid) t)
@@ -119,20 +139,9 @@ genExp (AExpr t (EApp f es))  = do  ps <- mapM genExp es
                                     return (t,(OId lid))
 genExp (AExpr t (EAppS f str))  = do  id <- addGlobString str 
                                       lid <- createLLVMId
-                                      addInstr (LLGetElemPtr (OId lid) ((length str)+1) TString id)
-                                      addInstr (LLCall (OId f) TVoid f [(TString,(OId lid))])
+                                      addInstr (LLGetElemPtrString (OId lid) ((length str)+1) TString id)
+                                      addInstr (LLCall (OId f) TVoid f [(TPtr8,(OId lid))])
                                       return (TVoid,(OId f))
-
-genExp (AExpr (TIdent _) (ENew _ _))  = undefined -- allocate for structs (classes are transformed to structs)
-
-genExp (AExpr t (ENew id)) = do lid <- createLLVMId
-                                size <- getStructSize t
-                                addInstr (LLCall (OL lid) TPtr8 "calloc" [(TInt, OI size), (TInt, OI 1)])
-                                lid' <- createLLVMId
-                                addInstr (LLBitcast (OL lid') TPtr8 (OL lid) t)
-                                return (t, (OL lid'))
-  
-genExp (AExpr (DType _ _) (ENew _ es)) = undefined -- allocate arrays
 
 genExp (AExpr t (ENot e)) = do  (_,v) <- genExp e
                                 lid <- createLLVMId
@@ -189,23 +198,50 @@ genExp (AExpr t (EMul e1 op e2)) = do (_,v1) <- genExp e1
                                         Div -> addInstr (LLDiv (OId lid) t v1 v2)
                                         Mod -> addInstr (LLRem (OId lid) t v1 v2)
                                       return (t, (OId lid))
-genExp (AExpr _ (ERel e1@(AExpr t _) op e2)) = do (_,v1) <- genExp e1
-                                                  (_,v2) <- genExp e2
-                                                  lid <- createLLVMId
-                                                  if t == DType TInt 0             
-                                                    then case op of
-                                                          Lth ->  addInstr (LLCmp (OId lid) t "slt" v1 v2)
-                                                          Leq ->  addInstr (LLCmp (OId lid) t "sle" v1 v2)
-                                                          Gth ->  addInstr (LLCmp (OId lid) t "sgt" v1 v2)
-                                                          Geq ->  addInstr (LLCmp (OId lid) t "sge" v1 v2)
-                                                          Eq  ->  addInstr (LLCmp (OId lid) t "eq" v1 v2)
-                                                          Neq ->  addInstr (LLCmp (OId lid) t "ne" v1 v2)
-                                                    else case op of
-                                                          Lth ->  addInstr (LLCmp (OId lid) t "olt" v1 v2)
-                                                          Leq ->  addInstr (LLCmp (OId lid) t "ole" v1 v2)
-                                                          Gth ->  addInstr (LLCmp (OId lid) t "ogt" v1 v2)
-                                                          Geq ->  addInstr (LLCmp (OId lid) t "oge" v1 v2)
-                                                          Eq  ->  addInstr (LLCmp (OId lid) t "oeq" v1 v2)
-                                                          Neq ->  addInstr (LLCmp (OId lid) t "one" v1 v2)
-                                                  return (DType TBool 0,(OId lid))
-genExp e = error (show e)
+genExp (AExpr _ (ERel e1@(AExpr t _) op e2)) = 
+  do (_,v1) <- genExp e1
+     (_,v2) <- genExp e2
+     lid <- createLLVMId
+     case t of
+       DType TDouble _ -> case op of
+                            Lth ->  addInstr (LLCmp (OId lid) t "olt" v1 v2)
+                            Leq ->  addInstr (LLCmp (OId lid) t "ole" v1 v2)
+                            Gth ->  addInstr (LLCmp (OId lid) t "ogt" v1 v2)
+                            Geq ->  addInstr (LLCmp (OId lid) t "oge" v1 v2)
+                            Eq  ->  addInstr (LLCmp (OId lid) t "oeq" v1 v2)
+                            Neq ->  addInstr (LLCmp (OId lid) t "one" v1 v2)
+       
+       _               -> case op of
+                            Lth ->  addInstr (LLCmp (OId lid) t "slt" v1 v2)
+                            Leq ->  addInstr (LLCmp (OId lid) t "sle" v1 v2)
+                            Gth ->  addInstr (LLCmp (OId lid) t "sgt" v1 v2)
+                            Geq ->  addInstr (LLCmp (OId lid) t "sge" v1 v2)
+                            Eq  ->  addInstr (LLCmp (OId lid) t "eq" v1 v2)
+                            Neq ->  addInstr (LLCmp (OId lid) t "ne" v1 v2)                                  
+     return (DType TBool 0,(OId lid))
+
+
+
+genExp (AExpr t@(TIdent id) (ENew _ _))  = do lid <- createLLVMId
+                                              size <- getStructSize id
+                                              addInstr (LLCall (OId lid) (TPtr8) "calloc" [((DType TInt 0), OInteger size), ((DType TInt 0), OInteger 1)])
+                                              lid' <- createLLVMId
+                                              addInstr (LLBitcast (OId lid') (TPtr8) (OId lid) t)
+                                              return (t, (OId lid'))
+
+
+genExp (AExpr t (ENull ptr)) = return (t, ONull)
+
+genExp (AExpr t (EPtr e field)) = do (t'@(TIdent id),v) <- genExp e
+                                     fOff <- getFieldOffset field id
+                                     lid' <- createLLVMId
+                                     addInstr (LLGetElemPtr (OId lid') t' v (DType TInt 0) (OInteger fOff))
+                                     lid'' <- createLLVMId
+                                     addInstr (LLLoad (OId lid'') t lid')
+                                     return (t, (OId lid''))
+  
+genExp (AExpr (DType _ _) (ENew _ es)) = undefined -- allocate arrays
+
+
+
+genExp e = error $ "ERROR: " ++ (show e)

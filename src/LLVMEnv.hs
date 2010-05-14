@@ -4,10 +4,12 @@ import LLVMAbs
 import ParserAbs
 
 import Data.Map
+import Data.List
 import Control.Monad
 import Control.Monad.State
 
 type Env = Map Id (LLVMId,DType)
+type StructMap = Map Id [(Id, DType)]
 
 
 data FctEnv = FctEnv
@@ -23,19 +25,20 @@ data FctEnv = FctEnv
   deriving Show
 
 newFctEnv :: FctEnv
-newFctEnv = FctEnv { funName = "", returnType = TVoid, params = [], instr = [LLLabel "lab0"], env = [empty], labelCounter = 0, llvmIdCounter = 1 }
+newFctEnv = FctEnv { funName = "", returnType = TVoid, params = [], instr = [LLLabel "lab0"], env = [empty], labelCounter = 1, llvmIdCounter = 0 }
 
 
 data LLVMEnv = LLVMEnv
   {
     fctEnv :: [FctEnv],
     globStrings :: [(LLVMId, String)],
-    globArrayTypes :: Map DType LLVMId
+    globArrayTypes :: Map DType LLVMId,
+    structs :: StructMap
   }
   deriving Show
 
 newLLVMEnv :: LLVMEnv
-newLLVMEnv = LLVMEnv { fctEnv = [], globStrings = [] }
+newLLVMEnv = LLVMEnv { fctEnv = [], globStrings = [], globArrayTypes = empty, structs = empty }
 
 type S a = State LLVMEnv a
 
@@ -132,3 +135,32 @@ createPLLVMId id = "_p_" ++ id
 id2LLVMId :: Id -> Integer -> LLVMId
 id2LLVMId x i = "var" ++ x ++ show(i)
 
+-- Get the offset for field in the struct type def'd by ptr
+getFieldOffset :: Id -> Id -> S Integer
+getFieldOffset field struct = 
+  do s <- get
+     let strs = structs s
+     case Data.Map.lookup struct strs of
+       Nothing -> error $ "getFieldOffset: Something went really wrong here.."
+       Just fields -> case elemIndex field [ f | (f, t) <- fields]  of
+                        Nothing -> error $ "getFieldOffset: Something went really wrong here.."  
+                        Just i  -> return (toInteger i)
+
+-- Get the size of a struct
+getStructSize :: Id -> S Integer
+getStructSize struct =
+  do s <- get
+     let strs = structs s
+     case Data.Map.lookup struct strs of
+       Nothing -> error $ "getStructSize: Something went really wrong here.."
+       Just fields -> return (countSize [ t | (f, t) <- fields ] 0)
+  where
+    countSize [] n = n
+    countSize (t:tt) n = countSize tt (n+4)
+
+-- Adds a struct to the struct map
+addStruct :: Id -> [(Id, DType)] -> S ()
+addStruct id decls = do s <- get
+                        let strs = structs s
+                        put $ s { structs = Data.Map.insert id decls strs }
+         

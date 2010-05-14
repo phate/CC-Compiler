@@ -90,10 +90,12 @@ checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
                                         ae <- checkExpr [t] e (show s)
                                         return (ret, SAss x es ae)
 
-checkStmt s@(SDerf x field e) ret = do (TIdent struct) <- lookupVar x
-                                       t <- lookupField field struct
-                                       ae <- checkExpr [t] e (show s)
-                                       return (ret, SDerf x field ae)
+checkStmt s@(SDerf e1 field e2) ret = do ae1@(AExpr t _) <- inferExpr e1
+                                         case t of
+                                           TIdent i -> do t' <- lookupField field i
+                                                          ae2 <- checkExpr [t'] e2 (show s)
+                                                          return (ret, SDerf ae1 field ae2)
+                                           _        -> fail $ (show s) ++ ": Expected struct, got " ++ (show t) 
                                           
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
@@ -164,13 +166,14 @@ inferExpr exp = case exp of
                               then fail $ (show exp) ++ " Indeces are not of type int"
                               else return (AExpr (DType t (i+(length es))) (ENew (DType t i) aes))
 
-  -- TODO: Make it possible to use list->list->list;..
-  EPtr id field   -> do (TIdent struct) <- lookupVar id
-                        t <- lookupField field struct
-                        return (AExpr t (EPtr id field))   
+  EPtr e field    -> do ae@(AExpr t _) <- inferExpr e
+                        case t of
+                          TIdent i -> do t' <- lookupField field i
+                                         return (AExpr t' (EPtr ae field))
+                          _        -> fail $ (show exp) ++ ": Expected struct, got " ++ (show t)  
 
   ENull id       -> do  t <- lookupPointer id
-                        return (AExpr t (ENull id))           
+                        return (AExpr t (ENull id))          
  
   EIdx id es      -> do (DType t d) <- lookupVar id
                         aes <- sequence [inferExpr e | e <- es ]

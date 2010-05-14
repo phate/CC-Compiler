@@ -66,8 +66,8 @@ Def         : FctDef                                        { FDef $1 }
             | StrDef                                        { SDef $1 }
             | TypeDef                                       { TDef $1 }
             | ClassDef                                      { CDef $1 }
-ClassDef    : 'class' id '{' ListCDecl '}' ';'              { ClassDef $2 $4 }
-            | 'class' id 'extends' id '{' ListCDecl '}' ';' { EClassDef $2 $4 $6 }
+ClassDef    : 'class' id '{' ListCDecl '}' 		              { ClassDef $2 $4 }
+            | 'class' id 'extends' id '{' ListCDecl '}'			{ EClassDef $2 $4 $6 }
 ListCDecl   : FctDef                                        { (:[]) (CDeclM $1) }
             | TId ';'                              	        { (:[]) (CDeclA $1) }
             | ListCDecl FctDef                              { (:) (CDeclM $2) $1 }
@@ -96,7 +96,7 @@ Stmt				: ';'																	          { SEmpty }
 						| 'if' '(' Expr ')' Stmt 'else' Stmt	          { SIfElse $3 $5 $7 }
 						| 'while' '(' Expr ')' Stmt						          { SWhile $3 $5 }
 						| Expr ';'														          { SExp $1 }
-            | id '->' id '=' Expr ';'                       { SDerf $1 $3 $5 }
+            | Expr8 '->' id '=' Expr ';'                    { SDerf $1 $3 $5 }
 ListItem		: Item																          { (:[]) $1 }
 						| Item ',' ListItem 									          { (:) $1 $3 }
 Item				: id																	          { NoInit $1 }
@@ -124,15 +124,16 @@ Expr3				: Expr3 AddOp Expr4										          { EAdd $1 $2 $3 }
 Expr4				: Expr4 MulOp	Expr5										          { EMul $1 $2 $3 }
 						| Expr5																          { $1 }
 Expr5       : 'new' 'int' ListIdx                           { ENew (DType TInt 0) $3 }                         
-            | Expr6                                         { $1 }
+            | 'new' id																			{ ENew (TIdent $2) [] }
+						| Expr6                                         { $1 }
 Expr6				: '!' Expr7														          { ENot $2 }
 						| '-' Expr7														          { ENeg $2 }
 						| Expr7																          { $1 }
 Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
-            | 'self' '.' Expr8                              { ESelf $3 }
-            | id '->' id                                    { EPtr $1 $3 }
-            | Expr8                                         { $1 }
-Expr8				: id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
+						| Expr8																					{ $1 }
+Expr8       : 'self'					                              { ESelf }
+            | Expr8 '->' id                                 { EPtr $1 $3 }
+						| id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
 						| 'false'															          { EFalse }
 						| 'true'															          { ETrue }

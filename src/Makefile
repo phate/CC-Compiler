@@ -6,7 +6,7 @@ llvm: llvmr ParserAbs.o Desugarer.o ErrM.o TypeCheckerEnv.o TypeChecker.o LLVMAb
 
 llvmr: Runtime.ll
 	llvm-as $<
-	mv Runtime.bc ../lib/
+	mv Runtime.bc ../lib/runtime.bc
 
 jvm: javar ParserAbs.o ErrM.o TypeCheckerEnv.o TypeChecker.o JVMAbs.o JVMEnv.o JVMGenerator.o JVMPrinter.o Parser.o Scanner.o jlc.o
 	ghc --make jlc
@@ -26,5 +26,5 @@ Parser.hs: Parser.y
 	happy $^
 
 clean:
-	$(RM) *.o *.hi ../lib/Runtime.class ../lib/Runtime.bc Parser.hs Scanner.hs ../jlc
+	$(RM) *.o *.hi ../lib/Runtime.class ../lib/runtime.bc Parser.hs Scanner.hs ../jlc
 

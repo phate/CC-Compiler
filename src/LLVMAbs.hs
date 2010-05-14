@@ -9,6 +9,7 @@ data Op =
     OId LLVMId
   | OInteger Integer
   | ODouble Double
+  | ONull
   deriving (Eq, Show)
 
 data LLVMInstr =
@@ -30,7 +31,9 @@ data LLVMInstr =
   | LLLabel Label
   | LLCBr Op Label Label 
   | LLCall Op DType LLVMId [(DType,Op)]
-  | LLGetElemPtr Op Int DType LLVMId
+  | LLGetElemPtrString Op Int DType LLVMId
+  | LLGetElemPtr Op DType Op DType Op
   | LLPhi Op DType ((Op,Label),(Op,Label))
+  | LLBitcast Op DType Op DType
   | Unreachable
   deriving (Eq, Show)
