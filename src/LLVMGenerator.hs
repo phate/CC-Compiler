@@ -282,6 +282,15 @@ genExp (AExpr t@(DType arrT dim) (EIdx id (e:[]))) = do (lid,t') <- lookupVar id
                                                         addInstr (LLLoad (OId lid'''') t lid''')
                                                         return (t, (OId lid''''))
 
+genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
+  do (t', v) <- genExp e
+     lid <- createLLVMId
+     addInstr (LLGetElemPtr (OId lid) t' v (DType TInt 0) (OInteger 1))
+     lid' <- createLLVMId
+     addInstr (LLLoad (OId lid') t lid)
+     return (t, (OId lid'))
+     
+
 
 
 genExp e = error $ "ERROR: " ++ (show e)

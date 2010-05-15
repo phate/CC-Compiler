@@ -191,12 +191,13 @@ inferExpr exp = case exp of
                           then fail $ (show exp) ++ " Too many indeces for array"
                           else if ts == False  
                                 then fail $ (show exp) ++ " Indeces are not of type int"
-                                else return (AExpr (DType t (d-(length es))) (EIdx id aes))  
 
---  EDot x "length" -> do (DType t d) <- lookupVar x
---                        if d <= 0
---                          then fail $ x ++ " is not an array"
---                          else return (AExpr (DType TInt 0) exp)
+                                else return (AExpr (DType t (d-(length es))) (EIdx id aes))  
+  EDot ESelf e   -> undefined
+  EDot e (EId "length") -> do ae@(AExpr (DType t d) _) <- inferExpr e
+                              if d <= 0
+                                then fail $ (show e) ++ " is not an array"
+                                else return (AExpr (DType TInt 0) (EDot ae (EId "length")))
 
   ENeg e          -> do ae@(AExpr t _) <- checkExpr [DType TInt 0, DType TDouble 0] e (show exp)
                         return (AExpr t (ENeg ae))
