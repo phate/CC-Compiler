@@ -124,6 +124,8 @@ Expr3				: Expr3 AddOp Expr4										          { EAdd $1 $2 $3 }
 Expr4				: Expr4 MulOp	Expr5										          { EMul $1 $2 $3 }
 						| Expr5																          { $1 }
 Expr5       : 'new' 'int' ListIdx                           { ENew (DType TInt 0) $3 }                         
+						| 'new' 'double' ListIdx												{ ENew (DType TDouble 0) $3 }
+						| 'new' 'boolean' ListIdx												{ ENew (DType TBool 0) $3 }
             | 'new' id																			{ ENew (TIdent $2) [] }
 						| Expr6                                         { $1 }
 Expr6				: '!' Expr7														          { ENot $2 }

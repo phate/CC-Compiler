@@ -87,8 +87,17 @@ checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
                                                                           addVar t id
                                                                           return (Init id ae)
 checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
-                                        ae <- checkExpr [t] e (show s)
-                                        return (ret, SAss x es ae)
+                                        case t of
+                                          DType t' d -> do aes <- sequence [inferExpr e | e <- es ]
+                                                           let ts =  and $ map (\(AExpr t _) -> t == (DType TInt 0))  aes
+                                                           if d < (length es)
+                                                             then fail $ (show s) ++ " Too many indeces for array"
+                                                             else if ts == False
+                                                               then fail $ (show s) ++ " Indeces are not of type int"
+                                                               else do ae <- checkExpr [DType t' (d - (length es))] e (show s)
+                                                                       return (ret, SAss x aes ae)
+                                          _          -> do ae <- checkExpr [t] e (show s)
+                                                           return (ret, SAss x es ae)
 
 checkStmt s@(SDerf e1 field e2) ret = do ae1@(AExpr t _) <- inferExpr e1
                                          case t of

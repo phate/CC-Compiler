@@ -100,13 +100,21 @@ printOp (OId lid)     = "%" ++ lid
 printOp (ONull)   = "null"
 
 printDType :: DType -> String
-printDType (DType TInt _)    = "i32"
-printDType (DType TDouble _) = "double"
-printDType (DType TBool _)   = "i1"
+printDType (DType TInt 0)    = "i32"
+printDType (DType TDouble 0) = "double"
+printDType (DType TBool 0)   = "i1"
 printDType (TIdent id) = "%struct." ++ id ++ "*"
 printDType (TVoid) = "void"
 printDType (TPtr8) = "i8*"
 printDType (TString) = "i8"
+
+printDType (TArr TInt) = "[ 0 x i32 ]*"
+printDType (TArr TDouble) = "[ 0 x double ]*"
+printDType (TArr TBool) = "[ 0 x i1 ]*"
+
+printDType (DType TInt i) = "{[ 0 x " ++ (printDType (DType TInt (i-1))) ++ "], i32 }*"
+printDType (DType TDouble i) = "{[ 0 x " ++ (printDType (DType TDouble (i-1))) ++ "], i32 }*"
+printDType (DType TBool i) = "{[ 0 x " ++ (printDType (DType TBool (i-1))) ++ "], i32 }*"
 --printDType t | t == TVoid      = "void"
 --printDType t | t == TString    = "i8"
 --printDType t | t == TStringP   = "i8*"

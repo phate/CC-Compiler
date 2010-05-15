@@ -70,6 +70,7 @@ data DType =
   | TVoid
   | TString
   | TPtr8
+  | TArr Type
   deriving (Eq, Show)
 
 data Type =
