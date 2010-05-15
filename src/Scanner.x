@@ -17,6 +17,7 @@ tokens :-
 	if																			{ \s -> TIf }
 	else																		{ \s -> TElse }
 	while																		{ \s -> TWhile }
+	for																			{ \s -> TFor }
 	return																	{ \s -> TReturn }
 	struct                                  { \s -> TStruct }
   typedef                                 { \s -> TTypeDef }
@@ -42,6 +43,7 @@ tokens :-
 	\{																			{ \s -> TOCB }
 	\}																			{ \s -> TCCB }
 	\;																			{ \s -> TSemi }
+	\:																			{ \s -> TCol }
 	\,																			{ \s -> TComma }
   \.                                      { \s -> TDot }
 	\+\+																		{ \s -> TIncr }

@@ -55,6 +55,7 @@ data Stmt =
   | SIf Expr Stmt
   | SIfElse Expr Stmt Stmt
   | SWhile Expr Stmt
+  | SFor DType Id Expr Stmt
   | SExp Expr
   | SDerf Expr Id Expr
   deriving Show

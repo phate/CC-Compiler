@@ -145,6 +145,16 @@ checkStmt (SWhile e s) ret        = do  case e of
                                                       (_,s') <- checkStmt s ret
                                                       return (ret, SWhile ae s')
 
+checkStmt (SFor (DType t i) x e s) ret = 
+  do pushScope
+     ae <- checkExpr [DType t (i+1)] e ("Error in for loop, " ++ (show e))
+     addVar (DType t i) x
+     (ret', s') <- checkStmt s ret
+     popScope
+     return (ret', (SFor (DType t i) x ae s'))
+     
+checkStmt s@(SFor t _ _ _) ret = fail $ (show s) ++ ": Error in for declaration: Only int, boolean or double (arrays) are allowed, got " ++ (show t)
+
 inferExpr :: Expr -> S Expr
 inferExpr exp = case exp of
   EId x           -> do t <- lookupVar x
@@ -191,13 +201,15 @@ inferExpr exp = case exp of
                           then fail $ (show exp) ++ " Too many indeces for array"
                           else if ts == False  
                                 then fail $ (show exp) ++ " Indeces are not of type int"
-
                                 else return (AExpr (DType t (d-(length es))) (EIdx id aes))  
-  EDot ESelf e   -> undefined
+
+  EDot ESelf e   -> undefined --CHECK IF INSIDE CLASSES ETC
   EDot e (EId "length") -> do ae@(AExpr (DType t d) _) <- inferExpr e
                               if d <= 0
                                 then fail $ (show e) ++ " is not an array"
                                 else return (AExpr (DType TInt 0) (EDot ae (EId "length")))
+
+  EDot e1 e2 -> undefined -- CHECK CLASS METHODS
 
   ENeg e          -> do ae@(AExpr t _) <- checkExpr [DType TInt 0, DType TDouble 0] e (show exp)
                         return (AExpr t (ENeg ae))

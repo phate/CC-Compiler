@@ -22,6 +22,7 @@ import ParserAbs
   'if'			{ TIf }
 	'else'		{ TElse }
 	'while'		{ TWhile }
+	'for'			{ TFor }
 	'int'			{ TTInt }
 	'double'	{ TTDouble }
 	'boolean'	{ TTBool }
@@ -56,6 +57,7 @@ import ParserAbs
 	'=='			{ TEq }
 	'!='			{ TNeq }
   '->'      { TDerf }
+	':'				{ TCol }
 
 %%
 
@@ -92,6 +94,7 @@ Stmt				: ';'																	          { SEmpty }
 						| id '--' ';'													          { SDecr $1 }
 						| 'return' Expr	';'										          { SRet $2 }
 						| 'return' ';'												          { SVRet }
+						| 'for' '(' Type id ':' Expr7 ')' Stmt					{ SFor $3 $4 $6 $8 }
 						| 'if' '(' Expr ')' Stmt							          { SIf $3 $5 }
 						| 'if' '(' Expr ')' Stmt 'else' Stmt	          { SIfElse $3 $5 $7 }
 						| 'while' '(' Expr ')' Stmt						          { SWhile $3 $5 }
@@ -134,7 +137,8 @@ Expr6				: '!' Expr7														          { ENot $2 }
 Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
 						| Expr8																					{ $1 }
 Expr8       : 'self'					                              { ESelf }
-            | Expr8 '->' id                                 { EPtr $1 $3 }
+            | '(' id ')' 'null'															{ ENull $2 }
+						| Expr8 '->' id                                 { EPtr $1 $3 }
 						| id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
 						| 'false'															          { EFalse }
@@ -142,7 +146,6 @@ Expr8       : 'self'					                              { ESelf }
 						| double															          { EDouble $1 }
 						| integer															          { EInteger $1 }
 						| id ListIdx													          { if null $2 then EId $1 else EIdx $1 $2 }
-            | '(' id ')' 'null'                             { ENull $2 }
 						| '(' Expr ')'												          { $2 }
 ListIdx     : {- empty -}                                   { [] }
             | '[' Expr ']' ListIdx                          { (:) $2 $4 }
@@ -180,6 +183,7 @@ data Token
   |	TIf
 	| TElse
 	| TWhile
+	| TFor
 	| TTInt
 	| TTDouble
 	| TTBool
@@ -214,5 +218,6 @@ data Token
 	| TEq
 	| TNeq
   | TDerf	
+	| TCol
 	deriving Show
 }
