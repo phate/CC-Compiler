@@ -59,7 +59,9 @@ genStmt (SAss (AExpr _ (EId id)) e2) = do (lid,t) <- lookupVar id
 -- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
 genStmt (SAss (AExpr t (EIndex e es)) e2) = undefined
 
--- Anything else needed for SAss ???
+-- Pointer dereferencing
+genStmt (SAss (AExpr t (EPtr e1 field)) e2) = undefined
+
 
 
 
