@@ -47,7 +47,7 @@ data Stmt =
     SEmpty
   | SCStmt CmpStmt
   | SDecl DType [Item]
-  | SAss Id [Expr] Expr
+  | SAss Expr Expr
   | SIncr Id
   | SDecr Id
   | SRet Expr
@@ -57,7 +57,6 @@ data Stmt =
   | SWhile Expr Stmt
   | SFor DType Id Expr Stmt
   | SExp Expr
-  | SDerf Expr Id Expr
   deriving Show
 
 data Item =
@@ -91,7 +90,7 @@ data Expr =
   | EFalse
   | EApp Id [Expr]
   | EAppS Id String
-  | EIdx Id [Expr]
+  | EIndex Expr [Expr]
   | EDot Expr Expr
   | EPtr Expr Id
   | ESelf

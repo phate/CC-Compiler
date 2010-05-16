@@ -86,25 +86,9 @@ checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
 									  ae <- checkExpr [t'] exp (show x)
                                                                           addVar t id
                                                                           return (Init id ae)
-checkStmt s@(SAss x es e) ret     = do  t <- lookupVar x
-                                        case t of
-                                          DType t' d -> do aes <- sequence [inferExpr e | e <- es ]
-                                                           let ts =  and $ map (\(AExpr t _) -> t == (DType TInt 0))  aes
-                                                           if d < (length es)
-                                                             then fail $ (show s) ++ " Too many indeces for array"
-                                                             else if ts == False
-                                                               then fail $ (show s) ++ " Indeces are not of type int"
-                                                               else do ae <- checkExpr [DType t' (d - (length es))] e (show s)
-                                                                       return (ret, SAss x aes ae)
-                                          _          -> do ae <- checkExpr [t] e (show s)
-                                                           return (ret, SAss x es ae)
-
-checkStmt s@(SDerf e1 field e2) ret = do ae1@(AExpr t _) <- inferExpr e1
-                                         case t of
-                                           TIdent i -> do t' <- lookupField field i
-                                                          ae2 <- checkExpr [t'] e2 (show s)
-                                                          return (ret, SDerf ae1 field ae2)
-                                           _        -> fail $ (show s) ++ ": Expected struct, got " ++ (show t) 
+checkStmt s@(SAss e1 e2) ret      = do  ae1@(AExpr t _) <- inferExpr e1
+                                        ae2 <- checkExpr [t] e2 (show s)
+                                        return (ret, (SAss ae1 ae2))
                                           
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
@@ -194,14 +178,18 @@ inferExpr exp = case exp of
   ENull id       -> do  t <- lookupPointer id
                         return (AExpr t (ENull id))          
  
-  EIdx id es      -> do (DType t d) <- lookupVar id
-                        aes <- sequence [inferExpr e | e <- es ]
-                        let ts =  and $ map (\(AExpr t _) -> t == (DType TInt 0))  aes
-                        if d < (length es)
-                          then fail $ (show exp) ++ " Too many indeces for array"
-                          else if ts == False  
-                                then fail $ (show exp) ++ " Indeces are not of type int"
-                                else return (AExpr (DType t (d-(length es))) (EIdx id aes))  
+  EIndex e es      -> do ae@(AExpr t _) <- inferExpr e
+                         case t of
+                           (DType t' d) -> if d <= 0
+                                             then fail $ (show e) ++ " is not an array"
+                                             else do aes <- sequence [inferExpr e | e <- es ]
+                                                     let ts =  and $ map (\(AExpr t _) -> t == (DType TInt 0))  aes
+                                                     if d < (length es)
+                                                       then fail $ (show exp) ++ " Too many indeces for array"
+                                                       else if ts == False  
+                                                         then fail $ (show exp) ++ " Indeces are not of type int"
+                                                         else return (AExpr (DType t' (d-(length es))) (EIndex ae aes))
+                           _            -> fail $ (show exp) ++ " is not an array"
 
   EDot ESelf e   -> undefined --CHECK IF INSIDE CLASSES ETC
   EDot e (EId "length") -> do ae@(AExpr (DType t d) _) <- inferExpr e

@@ -49,27 +49,17 @@ genStmt (SCStmt (CStmt ss)) = do  pushScope
 genStmt (SRet e)            = do  (t,v) <- genExp e
                                   addInstr (LLReturn t v)
 genStmt SVRet               = do  addInstr LLVReturn
-genStmt (SAss x [] e)       = do  (lid,t) <- lookupVar x
-                                  (_,v) <- genExp e
-                                  addInstr (LLStore t v (OId lid))
 
-genStmt (SAss x (es:[]) e)  = do (lid, (DType t _)) <- lookupVar x
-                                 lid' <- createLLVMId
-                                 addInstr (LLLoad (OId lid') (DType t 1) lid)
-                                 (t', v) <- genExp e
-                                 lid'' <- createLLVMId
-                                 addInstr (LLGetElemPtr (OId lid'') (DType t 1) (OId lid') (DType TInt 0) (OInteger 1))
-                                 (t'', v') <- genExp es
-                                 lid''' <- createLLVMId
-                                 addInstr (LLGetElemPtr (OId lid''') (TArr t 0) (OId lid'') (DType TInt 0) v')
-                                 addInstr (LLStore t' v (OId lid'''))
 
-genStmt (SDerf e1 field e2) = do (t@(TIdent id),v) <- genExp e1
-                                 fOff <- getFieldOffset field id
-                                 lid' <- createLLVMId
-                                 addInstr (LLGetElemPtr (OId lid') t v (DType TInt 0) (OInteger fOff))
-                                 (t',v') <- genExp e2
-                                 addInstr (LLStore t' v' (OId lid'))
+-- Pattern matching on LHS of assignments
+-- Normal ID's
+genStmt (SAss (AExpr _ (EId id)) e2) = do (lid,t) <- lookupVar id
+                                  	  (_,v) <- genExp e2
+                                          addInstr (LLStore t v (OId lid))
+-- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
+genStmt (SAss (AExpr t (EIndex e es)) e2) = undefined
+
+-- Anything else needed for SAss ???
 
 
 
@@ -136,12 +126,11 @@ genStmt (SWhile e s) = do lbegin <- createLabel
                           addInstr (LLBr lbegin)
                           addInstr (LLLabel lfalse)
 
-genStmt (SFor (DType t i) id e@(AExpr (DType TInt i2) (EId eid)) s) = 
+genStmt (SFor t id e s) = 
   genStmts [
   (SDecl (DType TInt 0) [Init "_iC" (AExpr (DType TInt 0) (EInteger 0))]), -- int _iC = 0
   (SWhile (AExpr (DType TBool 0) (ERel (AExpr (DType TInt 0) (EId "_iC")) Lth (AExpr (DType TInt 0) (EDot e (EId "length")))))) (SCStmt (CStmt [ --(while _iC < e.length)
-  (SDecl (DType t i) [NoInit id]), -- int ([]) x;
-  (SAss id [] (AExpr (DType t i) (EIdx eid [(AExpr (DType TInt 0) (EId "_iC"))]))), -- id = e[_iC]
+  (SDecl t [Init id (AExpr t (EIndex e [(AExpr (DType TInt 0) (EId "_iC"))]))]), -- int ([]) x = e[_ic]
   s, -- statements
   (SIncr "_iC")]))] -- _iC++
 
@@ -281,28 +270,15 @@ genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) = do (t', v) <- genExp e
                                                        return (t, (OId lid'''))
 
 
+genExp (AExpr t (EIndex e es)) =
+  do (t', (OId v)) <- genExp e
+     --lid' <- createLLVMId
+     --addInstr (LLLoad (OId lid') t' v)
+     --lid'' <- eIdxRec lid' t' es
+     --return (t, (OId lid''))
+     lid' <- eIdxRec v t' es
+     return (t, (OId lid'))
      
-{-                
--- TODO: SHOULD NOT BE ID BUT INSTEAD EXPRESSION AFTER EIdx, THIS SEEMS TO WORK OTHERWISE                             
-genExp (AExpr t@(DType arrT dim) (EIdx id (e:[]))) = do (lid,t') <- lookupVar id
-                                                        lid' <- createLLVMId
-                                                        addInstr (LLLoad (OId lid') t' lid) 
-                                                        (t'', v) <- genExp e
-                                                        lid'' <- createLLVMId
-                                                        addInstr (LLGetElemPtr (OId lid'') t' (OId lid') (DType TInt 0) (OInteger 1))
-                                                        lid''' <- createLLVMId
-                                                        addInstr (LLGetElemPtr (OId lid''') (TArr arrT) (OId lid'') (DType TInt 0) v)
-                                                        lid'''' <- createLLVMId
-                                                        addInstr (LLLoad (OId lid'''') t lid''')
-                                                        return (t, (OId lid''''))
--}
-
-genExp (AExpr t (EIdx id es)) =
-  do (lid, t') <- lookupVar id
-     lid' <- createLLVMId
-     addInstr (LLLoad (OId lid') t' lid)
-     lid'' <- eIdxRec lid' t' es
-     return (t, (OId lid''))
 
 genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
   do (t', v) <- genExp e

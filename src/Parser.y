@@ -89,7 +89,7 @@ ListStmt		: {- empty -}													          { [] }
 Stmt				: ';'																	          { SEmpty }
 						| CmpStmt 														          { SCStmt $1 }
 						| Type ListItem ';'										          { SDecl $1 $2 }
-						| id ListIdx '=' Expr ';'							          { SAss $1 $2 $4 }
+						| Expr '=' Expr ';'			 							          { SAss $1 $3 }
 						| id '++' ';'													          { SIncr $1 }
 						| id '--' ';'													          { SDecr $1 }
 						| 'return' Expr	';'										          { SRet $2 }
@@ -99,7 +99,6 @@ Stmt				: ';'																	          { SEmpty }
 						| 'if' '(' Expr ')' Stmt 'else' Stmt	          { SIfElse $3 $5 $7 }
 						| 'while' '(' Expr ')' Stmt						          { SWhile $3 $5 }
 						| Expr ';'														          { SExp $1 }
-            | Expr8 '->' id '=' Expr ';'                    { SDerf $1 $3 $5 }
 ListItem		: Item																          { (:[]) $1 }
 						| Item ',' ListItem 									          { (:) $1 $3 }
 Item				: id																	          { NoInit $1 }
@@ -139,16 +138,18 @@ Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
 Expr8       : 'self'					                              { ESelf }
             | '(' id ')' 'null'															{ ENull $2 }
 						| Expr8 '->' id                                 { EPtr $1 $3 }
+						| Expr8 ListIdx																	{ EIndex $1 $2 }
 						| id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
 						| 'false'															          { EFalse }
 						| 'true'															          { ETrue }
 						| double															          { EDouble $1 }
 						| integer															          { EInteger $1 }
-						| id ListIdx													          { if null $2 then EId $1 else EIdx $1 $2 }
+						| id																	          { EId $1 }
 						| '(' Expr ')'												          { $2 }
-ListIdx     : {- empty -}                                   { [] }
-            | '[' Expr ']' ListIdx                          { (:) $2 $4 }
+ListIdx     : '[' Expr ']' ListIdx2                         { (:) $2 $4 }
+ListIdx2    : {- empty -}																		{ [] }
+            | '[' Expr ']' ListIdx2													{ (:) $2 $4 }
 ListExpr		:	{- empty -}													          { [] }
 						| Expr																          { (:[]) $1 }
 						| Expr ',' ListExpr										          { (:) $1 $3 }
