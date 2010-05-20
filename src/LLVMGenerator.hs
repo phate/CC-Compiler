@@ -82,7 +82,6 @@ genStmt (SAss e1@(AExpr t (EIndex eid@(AExpr _ (EId id)) es)) e2) =
          lid''' <- createLLVMId
          addInstr (LLLoad (OId lid''') (DType arrT (i-1)) lid'')
          sAssEId' lid''' (DType arrT (i-1)) es
-         sAssEId' lid'' (DType arrT (i-1)) es
 
      
 
@@ -161,12 +160,15 @@ genStmt (SWhile e s) = do lbegin <- createLabel
                           addInstr (LLLabel lfalse)
 
 genStmt (SFor t id e s) = 
-  genStmts [
-  (SDecl (DType TInt 0) [Init "_iC" (AExpr (DType TInt 0) (EInteger 0))]), -- int _iC = 0
-  (SWhile (AExpr (DType TBool 0) (ERel (AExpr (DType TInt 0) (EId "_iC")) Lth (AExpr (DType TInt 0) (EDot e (EId "length")))))) (SCStmt (CStmt [ --(while _iC < e.length)
-  (SDecl t [Init id (AExpr t (EIndex e [(AExpr (DType TInt 0) (EId "_iC"))]))]), -- int([]) id = e([])[_iC]
-  s, -- statements
-  (SIncr "_iC")]))] -- _iC++
+  do pushScope
+     genStmts [
+       (SDecl (DType TInt 0) [Init "_iC" (AExpr (DType TInt 0) (EInteger 0))]), -- int _iC = 0
+       (SWhile (AExpr (DType TBool 0) (ERel (AExpr (DType TInt 0) (EId "_iC")) Lth (AExpr (DType TInt 0) (EDot e (EId "length")))))) (SCStmt (CStmt [ --(while _iC < e.length)
+       (SDecl t [Init id (AExpr t (EIndex e [(AExpr (DType TInt 0) (EId "_iC"))]))]), -- int([]) id = e([])[_iC]
+       s, -- statements
+       (SIncr "_iC")]))] -- _iC++
+     popScope
+     return ()
 
                                    
 genExp :: Expr -> S (DType, Op)
@@ -286,7 +288,7 @@ genExp (AExpr t (EPtr e field)) = do (t'@(TIdent id),v) <- genExp e
                                      return (t, (OId lid''))
 
 
-genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) = do (t', v) <- genExp e
+{-genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) = do (t', v) <- genExp e
                                                        lid <- createLLVMId
                                                        case arrT of
                                                          TBool -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 1) v)
@@ -301,7 +303,77 @@ genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) = do (t', v) <- genExp e
                                                        lid'''' <- createLLVMId -- STORING LENGTH
                                                        addInstr (LLGetElemPtr (OId lid'''') t (OId lid''') (DType TInt 0) (OInteger 0))
                                                        addInstr (LLStore t' v (OId lid'''')) -- END STORING LENGTH
-                                                       return (t, (OId lid'''))
+                                                       return (t, (OId lid'''))-}
+
+-- For single dimensional arrays
+genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) =
+  do (_, v) <- genExp e
+     lid <- createLLVMId
+     case arrT of
+       TBool -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 1) v)
+       TInt  -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 4) v)
+       TDouble -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 8) v)
+     lid' <- createLLVMId
+     addInstr (LLAdd (OId lid') (DType TInt 0) (OInteger 4) (OId lid)) 
+     lid'' <- createLLVMId
+     addInstr (LLCall (OId lid'') (TPtr8) "calloc" [((DType TInt 0), (OId lid')), ((DType TInt 0), OInteger 1)])
+     lid''' <- createLLVMId
+     addInstr (LLBitcast (OId lid''') (TPtr8) (OId lid'') t)
+     lid'''' <- createLLVMId -- STORING LENGTH
+     addInstr (LLGetElemPtr (OId lid'''') t (OId lid''') (DType TInt 0) (OInteger 0))
+     addInstr (LLStore (DType TInt 0) v (OId lid'''')) -- END STORING LENGTH
+     return (t, (OId lid'''))
+
+-- For multidimensional arrays, need to loop here
+genExp (AExpr t@(DType arrT dim) (ENew e' (e:es))) =
+  do (_, v) <- genExp e
+     -- First calloc, store etc
+     lid <- createLLVMId
+     addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 4) v) -- Pointer size 4
+     lid' <- createLLVMId
+     addInstr (LLAdd (OId lid') (DType TInt 0) (OInteger 4) (OId lid)) -- + 4 for i32 length
+     lid'' <- createLLVMId
+     addInstr (LLCall (OId lid'') TPtr8 "calloc" [((DType TInt 0), (OId lid')), ((DType TInt 0), OInteger 1)]) -- allocate heap mem
+     lid''' <- createLLVMId
+     addInstr (LLBitcast (OId lid''') TPtr8 (OId lid'') t)
+     lid'''' <- createLLVMId
+     addInstr (LLGetElemPtr (OId lid'''') t (OId lid''') (DType TInt 0) (OInteger 0)) -- length
+     addInstr (LLStore (DType TInt 0) v (OId lid''''))
+
+     -- Then do this iteratively for all arrays inside this one
+     cmpLbl <- createLabel
+     counter <- createLLVMId
+     addInstr (LLAlloc (OId counter) (DType TInt 0))
+     addInstr (LLStore (DType TInt 0) (OInteger 0) (OId counter)) -- store 0 in counter
+     addInstr (LLBr cmpLbl)
+     addInstr (LLLabel cmpLbl)
+     counterId <- createLLVMId
+     addInstr (LLLoad (OId counterId) (DType TInt 0) counter)
+     cmpLid <- createLLVMId
+     addInstr (LLCmp (OId cmpLid) (DType TInt 0) "slt" (OId counterId) v)
+     ltrue <- createLabel
+     lfalse <- createLabel
+     addInstr (LLCBr (OId cmpLid) ltrue lfalse)
+     addInstr (LLLabel ltrue)
+
+     -- Inside loop         
+     (t', v2) <- genExp (AExpr (DType arrT (dim-1)) (ENew e' es)) -- Gen subarray
+     ptrLid <- createLLVMId
+     arrayLid <- createLLVMId
+     addInstr (LLGetElemPtr (OId ptrLid) t (OId lid''') (DType TInt 0) (OInteger 1)) -- get array
+     addInstr (LLGetElemPtr (OId arrayLid) (TArr arrT (dim-1)) (OId ptrLid) (DType TInt 0) (OId counterId)) -- Get array[counter]
+     addInstr (LLStore t' v2 (OId arrayLid)) -- Store array
+     
+
+     -- Increment counter and go to test
+     countInc <- createLLVMId
+     addInstr (LLAdd (OId countInc) (DType TInt 0) (OId counterId) (OInteger 1))
+     addInstr (LLStore (DType TInt 0) (OId countInc) (OId counter))
+     addInstr (LLBr cmpLbl)
+
+     -- Outside loop, done
+     addInstr (LLLabel lfalse)
+     return (t, (OId lid'''))
 
 
 genExp (AExpr t (EIndex e es)) =
@@ -317,6 +389,7 @@ genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
      lid' <- createLLVMId
      addInstr (LLLoad (OId lid') t lid)
      return (t, (OId lid'))
+
 
 
 genExp e = error $ "ERROR: " ++ (show e)

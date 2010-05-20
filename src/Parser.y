@@ -167,7 +167,7 @@ RelOp				: '<'																	          { Lth }
 {
 
 parseError :: [Token] -> a
-parseError ts = error $ "Parse error" ++ (show ts) 
+parseError ts = error $ "ERROR" ++ (show ts)
 
 data Token
 	= TId	String

@@ -86,9 +86,6 @@ checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
 									  ae <- checkExpr [t'] exp (show x)
                                                                           addVar t id
                                                                           return (Init id ae)
---checkStmt s@(SAss e1 e2) ret      = do  ae1@(AExpr t _) <- inferExpr e1
---                                        ae2 <- checkExpr [t] e2 (show s)
---                                        return (ret, (SAss ae1 ae2))
 
 checkStmt s@(SAss e1@(EId id) e2) ret = do  ae1@(AExpr t _) <- inferExpr e1
                                             ae2 <- checkExpr [t] e2 (show s)
@@ -146,8 +143,8 @@ checkStmt (SWhile e s) ret        = do  case e of
                                                       return (ret, SWhile ae s')
 
 checkStmt (SFor (DType t i) x e s) ret = 
-  do pushScope
-     ae <- checkExpr [DType t (i+1)] e ("Error in for loop, " ++ (show e))
+  do ae <- checkExpr [DType t (i+1)] e ("Error in for loop, " ++ (show e))
+     pushScope
      addVar (DType t i) x
      (ret', s') <- checkStmt s ret
      popScope
