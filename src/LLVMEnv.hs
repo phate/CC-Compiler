@@ -156,7 +156,10 @@ getStructSize struct =
        Just fields -> return (countSize [ t | (f, t) <- fields ] 0)
   where
     countSize [] n = n
-    countSize (t:tt) n = countSize tt (n+4)
+    countSize (t:tt) n = case t of
+                         (DType TDouble 0) -> countSize tt (n+8)
+                         (DType TBool 0)   -> countSize tt (n+1)
+                         _                 -> countSize tt (n+4)
 
 -- Adds a struct to the struct map
 addStruct :: Id -> [(Id, DType)] -> S ()

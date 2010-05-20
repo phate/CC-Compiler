@@ -86,9 +86,25 @@ checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
 									  ae <- checkExpr [t'] exp (show x)
                                                                           addVar t id
                                                                           return (Init id ae)
-checkStmt s@(SAss e1 e2) ret      = do  ae1@(AExpr t _) <- inferExpr e1
-                                        ae2 <- checkExpr [t] e2 (show s)
-                                        return (ret, (SAss ae1 ae2))
+--checkStmt s@(SAss e1 e2) ret      = do  ae1@(AExpr t _) <- inferExpr e1
+--                                        ae2 <- checkExpr [t] e2 (show s)
+--                                        return (ret, (SAss ae1 ae2))
+
+checkStmt s@(SAss e1@(EId id) e2) ret = do  ae1@(AExpr t _) <- inferExpr e1
+                                            ae2 <- checkExpr [t] e2 (show s)
+                                            return (ret, (SAss ae1 ae2))
+
+checkStmt s@(SAss e1@(EIndex (EId id) es) e2) ret =
+  do ae1@(AExpr t _) <- inferExpr e1
+     ae2 <- checkExpr [t] e2 (show s)
+     return (ret, (SAss ae1 ae2))
+
+checkStmt s@(SAss e1@(EPtr e f) e2) ret = do ae1@(AExpr t _) <- inferExpr e1
+                                             ae2 <- checkExpr [t] e2 (show s)
+                                             return (ret, (SAss ae1 ae2))
+
+checkStmt s@(SAss _ _) ret = fail $ (show s) ++ ": Invalid l-value in assignment"
+                                        
                                           
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
