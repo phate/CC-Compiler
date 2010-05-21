@@ -11,10 +11,16 @@ generateInstructions (Program defs) = execState (genDefs defs) newLLVMEnv
 
 genDefs :: [Def] -> S()
 genDefs defs = do mapM_ insertStruct [ s | (SDef s) <- defs ]
+                  mapM_ insertStructClass [ c | (CDef c) <- defs ]
                   mapM_ genFctDef [ f | (FDef f) <- defs ]
+                  mapM_ genClassMethods [ c | (CDef c@(ClassDef id cdecls)) <- defs ]
                   return ()
   where
     insertStruct (StrDef id decls) = addStruct id [ (id', t) | (t, id') <- decls ]
+    insertStructClass (ClassDef id cdecls) = addStruct id [ (id', t) | (CDeclA (t, id')) <- cdecls ]
+    genClassMethods (ClassDef cid cdecls)  = mapM_ (genClassMethod cid) [ f | (CDeclM f@(FctDef _ _ _ _)) <- cdecls]
+    genClassMethod id (FctDef t mid args (CStmt ss)) = genFctDef $ (FctDef t ("_" ++ id ++ "_" ++ mid) ((Arg (TIdent id) "this"):args) 
+      (CStmt ss)) -- Todo here, map from instance variable name to this->name
 
 
 --genDefs :: [Def] -> S()
@@ -291,24 +297,6 @@ genExp (AExpr t (EPtr e field)) = do (t'@(TIdent id),v) <- genExp e
                                      addInstr (LLLoad (OId lid'') t lid')
                                      return (t, (OId lid''))
 
-
-{-genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) = do (t', v) <- genExp e
-                                                       lid <- createLLVMId
-                                                       case arrT of
-                                                         TBool -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 1) v)
-                                                         TInt  -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 4) v)
-                                                         TDouble -> addInstr (LLMul (OId lid) (DType TInt 0) (OInteger 8) v)
-                                                       lid' <- createLLVMId
-                                                       addInstr (LLAdd (OId lid') (DType TInt 0) (OInteger 4) (OId lid)) 
-                                                       lid'' <- createLLVMId
-                                                       addInstr (LLCall (OId lid'') (TPtr8) "calloc" [((DType TInt 0), (OId lid')), ((DType TInt 0), OInteger 1)])
-                                                       lid''' <- createLLVMId
-                                                       addInstr (LLBitcast (OId lid''') (TPtr8) (OId lid'') t)
-                                                       lid'''' <- createLLVMId -- STORING LENGTH
-                                                       addInstr (LLGetElemPtr (OId lid'''') t (OId lid''') (DType TInt 0) (OInteger 0))
-                                                       addInstr (LLStore t' v (OId lid'''')) -- END STORING LENGTH
-                                                       return (t, (OId lid'''))-}
-
 -- For single dimensional arrays
 genExp (AExpr t@(DType arrT dim) (ENew _ (e:[]))) =
   do (_, v) <- genExp e
@@ -393,6 +381,19 @@ genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
      lid' <- createLLVMId
      addInstr (LLLoad (OId lid') t lid)
      return (t, (OId lid'))
+
+
+genExp (AExpr t (EDot e1@(AExpr (TIdent cid) _) (AExpr _ (EApp mid es)))) = 
+  do let cid' = cid
+     --cid' <- getClass cid mid -- Since the function actually may be in base class
+     genExp (AExpr t (EApp ("_" ++ cid ++ "_" ++ mid) (e1:es)))
+
+
+genExp (AExpr (TIdent i) ESelf) = do (lid,t) <- lookupVar "this"
+                                     lid' <- createLLVMId
+                                     addInstr (LLLoad (OId lid') t lid)
+                                     return (t, (OId lid'))
+     
 
 
 
