@@ -9,18 +9,58 @@ typecheck :: Program -> Err (Program, TCEnv)
 typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEnv
                               return ((Program defs'), env)
 
+
+
+{- /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\
+
+   checkClassDef (ClassDef id cdecls):
+	* RESOLVE TYPES FOR iVars
+
+   checkClassDef (EClassDef sub base cdecls):
+	* NEED TO ADD ALL PARENT(S) INSTANCE VARIABLES
+        * NEED TO CHECK WHETHER base ACTUALLY EXIST
+	* NEED TO CHECK SO THAT NO METHOD IN sub EXISTS IN ANY BASE CLASS(es) base(+base's base etc)
+	* NEED TO CHECK NO CIRCULAR INHERITANCE
+        * RESOLVE TYPES FOR iVars
+
+   checkDecl x@(Init id exp):
+	* SUBTYPING FOR CLASSES, i.e. allow: Node n = new Node2; Dont allow Node2 n = new Node;
+
+   checkStmt s@(SAss e1@(EIndex (EId id) es) e2) ret:
+        * SUBTYPING FOR CLASSES, i.e. allow: Node n; Node2 n2; n = n2; Dont allow n2 = n;
+
+   checkStmt s@(SRet e) ret:
+        * SUBTYPING FOR CLASSES, i.e. allow: Node foo(){ return new Node2; }
+
+   /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\ -}
+
 setupDefs :: [Def] -> S [Def]
-setupDefs ds = do mapM_ insertStruct [ s | (SDef s) <- ds ]
-                  mapM_ insertTypeDef [ td | (TDef td) <- ds ]
-                  mapM_ insertClass [ (ClassDef id cdecls) | (CDef (ClassDef id cdecls)) <- ds ]
-                  mapM_ insertSubClass [ (EClassDef sub base cdecls) | (CDef (EClassDef sub base cdecls)) <- ds ]
-                  mapM_ insertFunction [ f | (FDef f) <- ds ]
+setupDefs ds = do let strDefs  = [ s | (SDef s) <- ds ]
+                  let typeDefs = [ td | (TDef td) <- ds ]
+                  let cDefs    = [ c | (CDef c@(ClassDef id cdecls)) <- ds ]
+                  let eCDefs   = [ ec | (CDef ec@(EClassDef sub base cdecls)) <- ds ]
+                  let fctDefs  = [ f | (FDef f) <- ds ]
+
+
+                  mapM_ insertStruct strDefs
+                  mapM_ insertTypeDef typeDefs
+                  mapM_ insertClass cDefs
+                  mapM_ insertSubClass eCDefs
+                  mapM_ insertFunction fctDefs
+                  mapM_ insertClassMethods cDefs
+                  mapM_ insertSubClassMethods eCDefs
                   checkDefs ds
 	where  
                insertStruct (StrDef id decls)             = addStruct id [ (id', t) | (t, id') <- decls ]
                insertTypeDef (TypeDef struct ptr)         = addPtrTypeDef struct ptr
-               insertClass (ClassDef id cdecls)           = return ()
-               insertSubClass (EClassDef sub base cdecls) = return ()
+
+               insertClass (ClassDef id cdecls)           = addClass id
+               insertSubClass (EClassDef sub base cdecls) = addSubClass sub base
+
+               insertClassMethods (ClassDef cid cdecls)   = mapM_ (insertClassMethod cid) [ (mid, t, args) | (CDeclM (FctDef t mid args _)) <- cdecls]
+               insertSubClassMethods (EClassDef sub base cdecls) = mapM_ (insertClassMethod sub) [ (mid, t, args) | (CDeclM (FctDef t mid args _)) <- cdecls]
+               insertClassMethod cid (mid, ret, args)     = addMethod cid mid ([t' | (Arg t' id') <- args ], ret)
+
                insertFunction (FctDef t id args ss)       = addFun id ([t' | (Arg t' id') <- args], t)
 
 checkDefs :: [Def] -> S [Def]
@@ -36,13 +76,47 @@ checkDefs ((SDef s):ds) = do  sdef <- checkStrDef s
                               ds'  <- checkDefs ds
                               return $ (SDef sdef):ds'
 
---checkDefs ((CDef c):ds) = do  cdef <- checkClassDef s
---                              ds' <- checkDefs ds
---                              return $ (CDef cdef):ds'
+checkDefs ((CDef c):ds) = do  cdef <- checkClassDef c
+                              ds' <- checkDefs ds
+                              return $ (CDef cdef):ds'
 
 checkDefs (d:ds)        = do  ds' <- checkDefs ds
                               return $ d:ds'
 
+
+checkClassDef :: ClassDef -> S ClassDef
+checkClassDef (ClassDef id cdecls) =
+  do setCheckingClass True id
+     let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
+     let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
+     meths' <- mapM (checkClassMeth id iVars) meths
+     let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
+     return (ClassDef id (iVars' ++ meths'))
+
+checkClassDef (EClassDef sub base cdecls) =
+  do setCheckingClass True sub
+     let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
+     let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
+     meths' <- mapM (checkClassMeth sub iVars) meths
+     let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
+     return (EClassDef sub base (iVars' ++ meths'))
+     
+
+-- ClassName -> Instance variables -> Method
+checkClassMeth :: Id -> [(DType, Id)] -> CDecl -> S CDecl
+checkClassMeth cid iVars (CDeclM (FctDef t mid args (CStmt ss))) = 
+  do emptyContext
+     setReturnType t
+     mapM_ (\(t',x) -> addVar t' x) iVars -- Instance variables
+     pushScope -- In case we get as a parameter "x" when x is also a instance variable
+     mapM_ (\(t',x) -> addVar t' x) [(t', x) | (Arg t' x) <- args] -- Parameters
+     (ps,rt) <- lookupMethod cid mid
+     let args' = zipWith Arg ps [id | (Arg _ id) <- args]
+     (retOk, ss') <- checkStmts ss False
+     popScope
+     if retOk || (t == TVoid)
+       then return (CDeclM (FctDef rt mid args' (CStmt ss')))
+       else fail $ "Method " ++ mid ++ " in class " ++ cid ++ " does not return"
 
 checkStrDef :: StrDef -> S StrDef
 checkStrDef (StrDef id decls) = 
@@ -55,6 +129,7 @@ checkStrDef (StrDef id decls) =
 checkFctDef :: FctDef -> S FctDef
 checkFctDef (FctDef t id args (CStmt ss)) =
    do emptyContext
+      setCheckingClass False ""
       setReturnType t
       mapM_ (\(t,x) -> addVar t x) [(t',id') | (Arg t' id') <- args]
       (ps,rt) <- lookupFun id
@@ -204,13 +279,27 @@ inferExpr exp = case exp of
                                                          else return (AExpr (DType t' (d-(length es))) (EIndex ae aes))
                            _            -> fail $ (show exp) ++ " is not an array"
 
-  EDot ESelf e   -> undefined --CHECK IF INSIDE CLASSES ETC
+  ESelf          -> do (b, i) <- getCheckingClass
+                       case b of
+                         True  -> return (AExpr (TIdent i) ESelf)
+                         False -> fail $ "Can't use keyword self outside class methods"
+
   EDot e (EId "length") -> do ae@(AExpr (DType t d) _) <- inferExpr e
                               if d <= 0
                                 then fail $ (show e) ++ " is not an array"
                                 else return (AExpr (DType TInt 0) (EDot ae (EId "length")))
 
-  EDot e1 e2 -> undefined -- CHECK CLASS METHODS
+  EDot e1 (EApp mid es) -> 
+    do ae1@(AExpr t' _) <- inferExpr e1
+       case t' of
+         TIdent cid -> do (ts, t) <- lookupMethod cid mid
+                          aes <- sequence [inferExpr e | e <- es ]
+                          ts' <- sequence $ map (\(AExpr t _) -> return t) aes
+                          if ts == ts' then return (AExpr t (EDot ae1 (AExpr t (EApp mid aes)))) else fail $ (show exp) ++ ": Bad arguments"
+         _          -> fail $ (show exp) ++ ": Invalid expression before ."
+
+
+  EDot _ _              -> fail $ (show exp) ++ ": Invalid expression after ."
 
   ENeg e          -> do ae@(AExpr t _) <- checkExpr [DType TInt 0, DType TDouble 0] e (show exp)
                         return (AExpr t (ENeg ae))

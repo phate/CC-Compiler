@@ -53,13 +53,15 @@ data TCEnv = TCEnv
     tcFctEnv :: TCFctEnv,
     structs :: Structs,
     ptrTypeDefs :: PtrTypeDefs,
-    tcClassEnv :: Map Id TCClassEnv  
+    tcClassEnv :: Map Id TCClassEnv,
+    checkingClass :: (Bool, Id),
+    sub2Base :: Map Id Id
   }
 
 type S a = StateT TCEnv Err a
 
 newTCEnv :: TCEnv
-newTCEnv = TCEnv { tcFctEnv = newTCFctEnv, structs = empty, ptrTypeDefs = empty, tcClassEnv = empty }
+newTCEnv = TCEnv { tcFctEnv = newTCFctEnv, structs = empty, ptrTypeDefs = empty, tcClassEnv = empty, checkingClass = (False, ""), sub2Base = empty }
 
 lookupFun :: Id -> S ([DType], DType)
 lookupFun id = do s <- get
@@ -67,6 +69,21 @@ lookupFun id = do s <- get
                   case Data.Map.lookup id sig of
                     Nothing  -> fail $ "Function " ++ id ++ " not found"
                     Just ret -> return ret
+
+lookupMethod :: Id -> Id -> S ([DType], DType)
+lookupMethod cid mid = 
+  do s <- get
+     let cDefs = tcClassEnv s
+     let subBase = sub2Base s
+     case Data.Map.lookup cid cDefs of
+       Nothing -> fail $ "Class " ++ cid ++ " not found"
+       Just c  -> do let mths = methods c
+                     let (sig, cont) = env mths
+                     case Data.Map.lookup mid sig of
+                       Just ret -> return ret
+                       Nothing  -> case Data.Map.lookup cid subBase of
+                                     Nothing   -> fail $ "Method " ++ mid ++ " not found"
+                                     Just base -> lookupMethod base mid 
 
 emptyContext :: S ()
 emptyContext = do s <- get
@@ -124,7 +141,52 @@ addFun id (ps,rt) = do  s <- get
 
 addClass :: Id -> S()
 addClass id = do  s <- get
-                  put $ s { tcClassEnv = insert id newTCClassEnv (tcClassEnv s) }
+                  let ptrDefs = ptrTypeDefs s
+                  let strDefs = structs s
+                  let cDefs = tcClassEnv s
+                  case member id ptrDefs of
+                    True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct pointer"
+                    False -> case member id strDefs of
+                               True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct"
+                               False -> case member id cDefs of
+                                          True  -> fail $ "Class " ++ id ++ " multiple declared"
+                                          False -> put $ s { tcClassEnv = insert id newTCClassEnv cDefs }
+
+addSubClass :: Id -> Id -> S ()
+addSubClass sub base = 
+  do s <- get
+     let ptrDefs = ptrTypeDefs s
+     let strDefs = structs s
+     let cDefs = tcClassEnv s
+     let subBase = sub2Base s
+     case member sub ptrDefs of
+       True  -> fail $ "Can't add subclass " ++ sub ++ ", already declared as a struct pointer"
+       False -> case member sub strDefs of
+                  True  -> fail $ "Can't add subclass " ++ sub ++ ", already declared as a struct"
+                  False -> case member sub cDefs of
+                             True  -> fail $ sub ++ " multiple declared"
+                             False -> if sub == base
+                                        then fail $ "Subclass " ++ sub ++ " can't extend itself"
+                                        else put $ s { tcClassEnv = insert sub newTCClassEnv cDefs, sub2Base = insert sub base subBase }
+
+addMethod :: Id -> Id -> ([DType],DType) -> S()
+addMethod cid mid (ps,rt) = 
+  do s <- get
+     let cDefs = tcClassEnv s
+     case Data.Map.lookup cid cDefs of
+       Nothing -> fail $ "Class " ++ cid ++ " not declared"
+       Just e  -> do let mths = methods e
+                     let attr = attributes e
+                     let (sig, cont) = env mths
+                     ps' <- mapM resolveType ps
+                     rt' <- resolveType rt
+                     case member mid sig of
+                       True  -> fail $ "Method " ++ mid ++ " in class " ++ cid ++ " multiple declared"
+                       False -> do let sig' = insert mid (ps',rt') sig
+                                   let mths' = TCFctEnv{ env = (sig', cont), retType = rt' }
+                                   let cEnv = TCClassEnv{ methods = mths', attributes = attr }
+                                   let cDefs' = adjust (\x -> cEnv) cid cDefs
+                                   put $ s { tcClassEnv = cDefs' }
                   
 {-
 addMethod :: Id -> Id -> ([DType],DType) -> S()
@@ -208,3 +270,13 @@ resolveType t = case t of
                   TIdent i -> do t' <- lookupPointer i
                                  return t'
                   _        -> return t
+
+setCheckingClass :: Bool -> Id -> S ()
+setCheckingClass b id = do s <- get
+                           put $ s { checkingClass = (b, id) }
+
+getCheckingClass :: S (Bool, Id)
+getCheckingClass = do s <- get
+                      let (b, id) = checkingClass s
+                      return (b, id)
+
