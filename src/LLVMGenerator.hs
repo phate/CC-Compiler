@@ -53,9 +53,11 @@ genStmt SVRet               = do  addInstr LLVReturn
 
 -- Pattern matching on LHS of assignments
 -- Normal ID's
-genStmt (SAss (AExpr _ (EId id)) e2) = do (lid,t) <- lookupVar id
-                                  	  (_,v) <- genExp e2
-                                          addInstr (LLStore t v (OId lid))
+genStmt (SAss (AExpr t' (EId id)) e2) = do (lid,t) <- lookupVar id
+                                  	   (_,v) <- genExp e2
+                                           lid' <- createLLVMId
+                                           addInstr (LLBitcast (OId lid') t v t') -- For subtyping in classes
+                                           addInstr (LLStore t (OId lid') (OId lid))
 
 -- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
 genStmt (SAss e1@(AExpr t (EIndex eid@(AExpr _ (EId id)) es)) e2) =
@@ -106,10 +108,12 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                                                         DType TBool 0   -> addInstr (LLStore t (OInteger 0) (OId lid))
                                                         TIdent i        -> addInstr (LLStore t ONull (OId lid))
                                                         _               -> return () -- For arrays, might instead store null?
-                              genDecl (Init x e) = do (_,v) <- genExp e
+                              genDecl (Init x e) = do (t',v) <- genExp e
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OId lid) t)
-                                                      addInstr (LLStore t v (OId lid))
+                                                      lid' <- createLLVMId
+                                                      addInstr (LLBitcast (OId lid') t' v t) -- For subtyping in classes
+                                                      addInstr (LLStore t (OId lid') (OId lid))
 genStmt (SExp e)            = do  genExp e >> return ()
 genStmt (SIncr x)           = do  (lid,t) <- lookupVar x
                                   tr <- createLLVMId
