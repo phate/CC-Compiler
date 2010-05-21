@@ -11,16 +11,10 @@ generateInstructions (Program defs) = execState (genDefs defs) newLLVMEnv
 
 genDefs :: [Def] -> S()
 genDefs defs = do mapM_ insertStruct [ s | (SDef s) <- defs ]
-                  mapM_ insertStructClass [ c | (CDef c) <- defs ]
                   mapM_ genFctDef [ f | (FDef f) <- defs ]
-                  mapM_ genClassMethods [ c | (CDef c@(ClassDef id cdecls)) <- defs ]
                   return ()
   where
     insertStruct (StrDef id decls) = addStruct id [ (id', t) | (t, id') <- decls ]
-    insertStructClass (ClassDef id cdecls) = addStruct id [ (id', t) | (CDeclA (t, id')) <- cdecls ]
-    genClassMethods (ClassDef cid cdecls)  = mapM_ (genClassMethod cid) [ f | (CDeclM f@(FctDef _ _ _ _)) <- cdecls]
-    genClassMethod id (FctDef t mid args (CStmt ss)) = genFctDef $ (FctDef t ("_" ++ id ++ "_" ++ mid) ((Arg (TIdent id) "this"):args) 
-      (CStmt ss)) -- Todo here, map from instance variable name to this->name
 
 
 --genDefs :: [Def] -> S()
@@ -61,9 +55,9 @@ genStmt SVRet               = do  addInstr LLVReturn
 -- Normal ID's
 genStmt (SAss (AExpr t' (EId id)) e2) = do (lid,t) <- lookupVar id
                                   	   (_,v) <- genExp e2
-                                           lid' <- createLLVMId
-                                           addInstr (LLBitcast (OId lid') t v t') -- For subtyping in classes
-                                           addInstr (LLStore t (OId lid') (OId lid))
+                                           --lid' <- createLLVMId
+                                           --addInstr (LLBitcast (OId lid') t v t')
+                                           addInstr (LLStore t v (OId lid))
 
 -- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
 genStmt (SAss e1@(AExpr t (EIndex eid@(AExpr _ (EId id)) es)) e2) =
@@ -113,13 +107,13 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                                                         DType TDouble 0 -> addInstr (LLStore t (ODouble 0.0) (OId lid))
                                                         DType TBool 0   -> addInstr (LLStore t (OInteger 0) (OId lid))
                                                         TIdent i        -> addInstr (LLStore t ONull (OId lid))
-                                                        _               -> return () -- For arrays, might instead store null?
+                                                        _               -> return () -- For arrays, might instead store null, doesnt seem to matter though.
                               genDecl (Init x e) = do (t',v) <- genExp e
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OId lid) t)
-                                                      lid' <- createLLVMId
-                                                      addInstr (LLBitcast (OId lid') t' v t) -- For subtyping in classes
-                                                      addInstr (LLStore t (OId lid') (OId lid))
+                                                      --lid' <- createLLVMId
+                                                      --addInstr (LLBitcast (OId lid') t' v t) -- For subtyping in classes
+                                                      addInstr (LLStore t v (OId lid))
 genStmt (SExp e)            = do  genExp e >> return ()
 genStmt (SIncr x)           = do  (lid,t) <- lookupVar x
                                   tr <- createLLVMId
@@ -383,16 +377,18 @@ genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
      return (t, (OId lid'))
 
 
+{-
 genExp (AExpr t (EDot e1@(AExpr (TIdent cid) _) (AExpr _ (EApp mid es)))) = 
   do let cid' = cid
-     --cid' <- getClass cid mid -- Since the function actually may be in base class
      genExp (AExpr t (EApp ("_" ++ cid ++ "_" ++ mid) (e1:es)))
 
 
-genExp (AExpr (TIdent i) ESelf) = do (lid,t) <- lookupVar "this"
+
+genExp (AExpr (TIdent i) ESelf) = do (lid,t) <- lookupVar "_this"
                                      lid' <- createLLVMId
                                      addInstr (LLLoad (OId lid') t lid)
                                      return (t, (OId lid'))
+-}
      
 
 

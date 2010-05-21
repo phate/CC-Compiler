@@ -12,6 +12,8 @@ import ErrM
 import LLVMGenerator
 import LLVMPrinter
 import LLVMEnv
+
+import Desugarer
                          
 
 check :: String -> String -> IO ()
@@ -20,7 +22,9 @@ check s file = let tree = parse $ alexScanTokens s in
     Ok (p,tcenv) -> do
                     hPutStrLn stderr "OK"
                     putStrLn (show p)
-                    let llvmenv = generateInstructions p
+                    putStrLn (show $ desugar p)
+                    let llvmenv = generateInstructions (desugar p)
+                    --let llvmenv = generateInstructions p
                     let code = getCode llvmenv
                     writeFile (file ++ ".ll") code
                     system $ "llvm-as -f " ++ file ++ ".ll" ++ "&& llvm-ld lib/runtime.bc " ++ file ++ ".bc"
