@@ -280,3 +280,12 @@ getCheckingClass = do s <- get
                       let (b, id) = checkingClass s
                       return (b, id)
 
+checkIsParent :: Id -> Id -> S ()
+checkIsParent base sub = 
+  do s <- get
+     let subBase = sub2Base s
+     case Data.Map.lookup sub subBase of
+       Nothing -> fail $ "Class not extending " ++ base
+       Just b  -> if (b == base) then return () else checkIsParent base b
+
+     

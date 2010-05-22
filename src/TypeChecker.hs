@@ -23,15 +23,6 @@ typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEn
 	* NEED TO CHECK NO CIRCULAR INHERITANCE
         * RESOLVE TYPES FOR iVars
 
-   checkDecl x@(Init id exp):
-	* SUBTYPING FOR CLASSES, i.e. allow: Node n = new Node2; Dont allow Node2 n = new Node;
-
-   checkStmt s@(SAss e1@(EIndex (EId id) es) e2) ret:
-        * SUBTYPING FOR CLASSES, i.e. allow: Node n; Node2 n2; n = n2; Dont allow n2 = n;
-
-   checkStmt s@(SRet e) ret:
-        * SUBTYPING FOR CLASSES, i.e. allow: Node foo(){ return new Node2; }
-
    /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\ -}
 
 setupDefs :: [Def] -> S [Def]
@@ -357,7 +348,11 @@ checkVar typ x err = do typ2 <- lookupVar x
 checkExpr :: Types -> Expr -> ErrStr -> S Expr
 checkExpr typs exp err = do ae@(AExpr t _) <- inferExpr exp
                             if elem t typs then return ae
-                               else fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
+                               else case t of
+                                      TIdent c -> do let (TIdent base) = (head typs) -- Subtyping, we know that typs here always only contain just one type
+                                                     checkIsParent base c
+                                                     return ae
+                                      _        -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
 
 inferBinOp :: Expr -> Expr -> Types -> ErrStr -> S (DType, Expr, Expr)
 inferBinOp e1 e2 typs err = do ae1@(AExpr t1 _) <- inferExpr e1
