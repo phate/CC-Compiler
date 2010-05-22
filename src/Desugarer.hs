@@ -16,6 +16,10 @@ cvtCDef (ClassDef id decls) = strdef:fctdefs
   where strdef  = SDef $ StrDef id [ as | (CDeclA as) <- decls ]
         fctdefs = map (\f -> FDef $ cvtMeth f id) [ f | (CDeclM f) <- decls ]
 
+cvtCDef (EClassDef sub base decls) = strdef:fctdefs
+  where strdef  = SDef $ StrDef sub [ as | (CDeclA as) <- decls ]
+        fctdefs = map (\f -> FDef $ cvtMeth f sub) [ f | (CDeclM f) <- decls ]
+
 cvtFct :: FctDef -> FctDef
 cvtFct (FctDef t id args (CStmt ss)) = (FctDef t id args (CStmt $ cvtStmtsFct ss))
 
