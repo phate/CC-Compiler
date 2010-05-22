@@ -17,8 +17,6 @@ typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEn
 	* RESOLVE TYPES FOR iVars
 
    checkClassDef (EClassDef sub base cdecls):
-	* NEED TO ADD ALL PARENT(S) INSTANCE VARIABLES
-        * NEED TO CHECK WHETHER base ACTUALLY EXIST
 	* NEED TO CHECK SO THAT NO METHOD IN sub EXISTS IN ANY BASE CLASS(es) base(+base's base etc)
 	* NEED TO CHECK NO CIRCULAR INHERITANCE
         * RESOLVE TYPES FOR iVars
@@ -45,8 +43,8 @@ setupDefs ds = do let strDefs  = [ s | (SDef s) <- ds ]
                insertStruct (StrDef id decls)             = addStruct id [ (id', t) | (t, id') <- decls ]
                insertTypeDef (TypeDef struct ptr)         = addPtrTypeDef struct ptr
 
-               insertClass (ClassDef id cdecls)           = addClass id
-               insertSubClass (EClassDef sub base cdecls) = addSubClass sub base
+               insertClass (ClassDef id cdecls)           = addClass id [ (id',t) | (CDeclA (t,id')) <- cdecls]
+               insertSubClass (EClassDef sub base cdecls) = addSubClass sub base [ (id',t) | (CDeclA (t,id')) <- cdecls]
 
                insertClassMethods (ClassDef cid cdecls)   = mapM_ (insertClassMethod cid) [ (mid, t, args) | (CDeclM (FctDef t mid args _)) <- cdecls]
                insertSubClassMethods (EClassDef sub base cdecls) = mapM_ (insertClassMethod sub) [ (mid, t, args) | (CDeclM (FctDef t mid args _)) <- cdecls]
@@ -78,15 +76,26 @@ checkDefs (d:ds)        = do  ds' <- checkDefs ds
 checkClassDef :: ClassDef -> S ClassDef
 checkClassDef (ClassDef id cdecls) =
   do setCheckingClass True id
-     let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
+     iVars <- getAllInstanceVariables id
+     --let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
+
+     -- Check no multiple variables
+     emptyContext
+     mapM_ (\(t',x) -> addVar t' x) iVars
+
      meths' <- mapM (checkClassMeth id iVars) meths
      let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
      return (ClassDef id (iVars' ++ meths'))
 
 checkClassDef (EClassDef sub base cdecls) =
   do setCheckingClass True sub
-     let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
+     iVars <- getAllInstanceVariables sub -- Also returns parents variables, in correct order, i.e. first parent first etc, for codegenerator later.
+
+     -- Check no multiple variables
+     emptyContext
+     mapM_ (\(t',x) -> addVar t' x) iVars
+
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
      meths' <- mapM (checkClassMeth sub iVars) meths
      let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]

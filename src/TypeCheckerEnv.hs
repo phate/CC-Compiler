@@ -139,21 +139,25 @@ addFun id (ps,rt) = do  s <- get
                           False -> put $ s { tcFctEnv = (tcFctEnv s) { env = (insert id (ps',rt') sig, cont) } }
 
 
-addClass :: Id -> S()
-addClass id = do  s <- get
-                  let ptrDefs = ptrTypeDefs s
-                  let strDefs = structs s
-                  let cDefs = tcClassEnv s
-                  case member id ptrDefs of
-                    True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct pointer"
-                    False -> case member id strDefs of
-                               True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct"
-                               False -> case member id cDefs of
-                                          True  -> fail $ "Class " ++ id ++ " multiple declared"
-                                          False -> put $ s { tcClassEnv = insert id newTCClassEnv cDefs }
+addClass :: Id -> [(Id, DType)] -> S()
+addClass id vars = 
+  do  s <- get
+      let ptrDefs = ptrTypeDefs s
+      let strDefs = structs s
+      let cDefs = tcClassEnv s
+      case member id ptrDefs of
+        True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct pointer"
+        False -> case member id strDefs of
+                   True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct"
+                   False -> case member id cDefs of
+                              True  -> fail $ "Class " ++ id ++ " multiple declared"
+                              --False -> put $ s { tcClassEnv = insert id newTCClassEnv cDefs }
+                              False -> do let attr = (fromList vars)
+                                          let newClassEnv = TCClassEnv{ methods = newTCFctEnv, attributes = attr }
+                                          put $ s { tcClassEnv = insert id newClassEnv cDefs }
 
-addSubClass :: Id -> Id -> S ()
-addSubClass sub base = 
+addSubClass :: Id -> Id -> [(Id, DType)] -> S ()
+addSubClass sub base vars = 
   do s <- get
      let ptrDefs = ptrTypeDefs s
      let strDefs = structs s
@@ -167,7 +171,10 @@ addSubClass sub base =
                              True  -> fail $ sub ++ " multiple declared"
                              False -> if sub == base
                                         then fail $ "Subclass " ++ sub ++ " can't extend itself"
-                                        else put $ s { tcClassEnv = insert sub newTCClassEnv cDefs, sub2Base = insert sub base subBase }
+                                        else do let attr = (fromList vars)
+                                                let newClassEnv = TCClassEnv{ methods = newTCFctEnv, attributes = attr }
+                                                put $ s { tcClassEnv = insert sub newClassEnv cDefs, sub2Base = insert sub base subBase }
+
 
 addMethod :: Id -> Id -> ([DType],DType) -> S()
 addMethod cid mid (ps,rt) = 
@@ -288,4 +295,17 @@ checkIsParent base sub =
        Nothing -> fail $ "Class not extending " ++ base
        Just b  -> if (b == base) then return () else checkIsParent base b
 
+getAllInstanceVariables :: Id -> S [(DType, Id)]
+getAllInstanceVariables sub = 
+  do s <- get
+     let subBase = sub2Base s
+     let cDefs = tcClassEnv s
+     case Data.Map.lookup sub cDefs of
+       Nothing -> fail $ "Class " ++ sub ++ " not declared"
+       Just c  -> do let attr = attributes c
+                     let attr' = [ (t, id) | (id, t) <- (toList attr)]
+                     case Data.Map.lookup sub subBase of
+                       Nothing -> return attr'
+                       Just b  -> do attr'' <- getAllInstanceVariables b
+                                     return $ attr'' ++ attr'
      
