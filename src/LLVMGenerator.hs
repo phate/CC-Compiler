@@ -47,17 +47,25 @@ genStmt (SCStmt (CStmt ss)) = do  pushScope
                                   genStmts ss
                                   popScope
 genStmt (SRet e)            = do  (t,v) <- genExp e
-                                  addInstr (LLReturn t v)
+                                  
+                                  -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
+                                  ret <- getReturnType
+                                  lid' <- createLLVMId
+                                  addInstr (LLBitcast (OId lid') t v ret)
+                                  addInstr (LLReturn ret (OId lid'))
+
 genStmt SVRet               = do  addInstr LLVReturn
 
 
 -- Pattern matching on LHS of assignments
 -- Normal ID's
-genStmt (SAss (AExpr t' (EId id)) e2) = do (lid,t) <- lookupVar id
-                                  	   (_,v) <- genExp e2
-                                           --lid' <- createLLVMId
-                                           --addInstr (LLBitcast (OId lid') t v t')
-                                           addInstr (LLStore t v (OId lid))
+genStmt (SAss (AExpr t (EId id)) e2) = do (lid,_) <- lookupVar id
+                                  	  (t',v) <- genExp e2
+
+                                           -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
+                                          lid' <- createLLVMId
+                                          addInstr (LLBitcast (OId lid') t' v t)
+                                          addInstr (LLStore t (OId lid') (OId lid))
 
 -- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
 genStmt (SAss e1@(AExpr t (EIndex eid@(AExpr _ (EId id)) es)) e2) =
@@ -111,9 +119,12 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                               genDecl (Init x e) = do (t',v) <- genExp e
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OId lid) t)
-                                                      --lid' <- createLLVMId
-                                                      --addInstr (LLBitcast (OId lid') t' v t) -- For subtyping in classes
-                                                      addInstr (LLStore t v (OId lid))
+
+                                                      -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
+                                                      lid' <- createLLVMId
+                                                      addInstr (LLBitcast (OId lid') t' v t)
+                                                      addInstr (LLStore t (OId lid') (OId lid))
+
 genStmt (SExp e)            = do  genExp e >> return ()
 genStmt (SIncr x)           = do  (lid,t) <- lookupVar x
                                   tr <- createLLVMId

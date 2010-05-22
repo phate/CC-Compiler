@@ -166,4 +166,11 @@ addStruct :: Id -> [(Id, DType)] -> S ()
 addStruct id decls = do s <- get
                         let strs = structs s
                         put $ s { structs = Data.Map.insert id decls strs }
-         
+
+
+getReturnType :: S DType
+getReturnType = do s <- get
+                   let (currFct:fcts) = fctEnv s
+                   let ret = returnType currFct
+                   return ret
+                   
