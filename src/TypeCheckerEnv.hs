@@ -46,7 +46,8 @@ data TCClassEnv = TCClassEnv
   }
 
 newTCClassEnv :: TCClassEnv
-newTCClassEnv = TCClassEnv { methods = newTCFctEnv, attributes = empty }
+newTCClassEnv = TCClassEnv { methods = newTCClassFctEnv, attributes = empty }
+newTCClassFctEnv = TCFctEnv { retType = TVoid, env = (empty,[empty]) }
 
 data TCEnv = TCEnv
   {
@@ -151,9 +152,8 @@ addClass id vars =
                    True  -> fail $ "Can't add class " ++ id ++ ", already declared as a struct"
                    False -> case member id cDefs of
                               True  -> fail $ "Class " ++ id ++ " multiple declared"
-                              --False -> put $ s { tcClassEnv = insert id newTCClassEnv cDefs }
                               False -> do let attr = (fromList vars)
-                                          let newClassEnv = TCClassEnv{ methods = newTCFctEnv, attributes = attr }
+                                          let newClassEnv = TCClassEnv{ methods = newTCClassFctEnv, attributes = attr }
                                           put $ s { tcClassEnv = insert id newClassEnv cDefs }
 
 addSubClass :: Id -> Id -> [(Id, DType)] -> S ()
@@ -172,7 +172,7 @@ addSubClass sub base vars =
                              False -> if sub == base
                                         then fail $ "Subclass " ++ sub ++ " can't extend itself"
                                         else do let attr = (fromList vars)
-                                                let newClassEnv = TCClassEnv{ methods = newTCFctEnv, attributes = attr }
+                                                let newClassEnv = TCClassEnv{ methods = newTCClassFctEnv, attributes = attr }
                                                 put $ s { tcClassEnv = insert sub newClassEnv cDefs, sub2Base = insert sub base subBase }
 
 
@@ -287,13 +287,19 @@ getCheckingClass = do s <- get
                       let (b, id) = checkingClass s
                       return (b, id)
 
-checkIsParent :: Id -> Id -> S ()
+checkIsParent :: Id -> Id -> S Bool
 checkIsParent base sub = 
   do s <- get
      let subBase = sub2Base s
      case Data.Map.lookup sub subBase of
-       Nothing -> fail $ "Class not extending " ++ base
-       Just b  -> if (b == base) then return () else checkIsParent base b
+       Nothing -> return False
+       Just b  -> if (b == base) then return True else checkIsParent base b
+
+checkIsClass :: Id -> S Bool
+checkIsClass id =
+  do s <- get
+     let cDefs = tcClassEnv s
+     return $ member id cDefs
 
 getAllInstanceVariables :: Id -> S [(DType, Id)]
 getAllInstanceVariables sub = 
@@ -308,4 +314,27 @@ getAllInstanceVariables sub =
                        Nothing -> return attr'
                        Just b  -> do attr'' <- getAllInstanceVariables b
                                      return $ attr'' ++ attr'
+
+
+
+-- Checks so that no subclass overrides any method from a parent
+checkMethodsNotOverride :: Id -> S ()
+checkMethodsNotOverride id = cMNO id [] where
+  cMNO :: Id -> [Id] -> S ()
+  cMNO id funs =
+    do s <- get
+       let cDefs = tcClassEnv s
+       let subBase = sub2Base s
+       case Data.Map.lookup id cDefs of
+         Nothing -> fail $ "Class " ++ id ++ " not declared"
+         Just c  -> do let meths = methods c
+                       let (sig,_) = env meths
+                       let cFuns = [ id' | (id', _) <- (toList sig) ]
+                       mapM_ (\fun -> if elem fun cFuns then (fail $ "Can't override method " ++ fun) else return ()) funs
+                       case Data.Map.lookup id subBase of
+                         Nothing -> return ()
+                         Just b  -> cMNO b (funs ++ cFuns)
+
+
+
      

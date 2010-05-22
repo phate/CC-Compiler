@@ -13,13 +13,7 @@ typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEn
 
 {- /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\
 
-   checkClassDef (ClassDef id cdecls):
-	* RESOLVE TYPES FOR iVars
-
-   checkClassDef (EClassDef sub base cdecls):
-	* NEED TO CHECK SO THAT NO METHOD IN sub EXISTS IN ANY BASE CLASS(es) base(+base's base etc)
-	* NEED TO CHECK NO CIRCULAR INHERITANCE
-        * RESOLVE TYPES FOR iVars
+	(* CHECK CIRCULAR INHERITANCE) -- NOT A BIG TODO ATM!!
 
    /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\ -}
 
@@ -76,30 +70,38 @@ checkDefs (d:ds)        = do  ds' <- checkDefs ds
 checkClassDef :: ClassDef -> S ClassDef
 checkClassDef (ClassDef id cdecls) =
   do setCheckingClass True id
-     iVars <- getAllInstanceVariables id
-     --let iVars = [(t, id') | (CDeclA (t,id')) <- cdecls]
-     let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
-
      -- Check no multiple variables
+     iVars <- getAllInstanceVariables id
      emptyContext
      mapM_ (\(t',x) -> addVar t' x) iVars
 
+     let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
      meths' <- mapM (checkClassMeth id iVars) meths
+     iVars' <- resolveInstanceVariableTypes iVars
      let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
      return (ClassDef id (iVars' ++ meths'))
 
 checkClassDef (EClassDef sub base cdecls) =
   do setCheckingClass True sub
-     iVars <- getAllInstanceVariables sub -- Also returns parents variables, in correct order, i.e. first parent first etc, for codegenerator later.
-
      -- Check no multiple variables
+     iVars <- getAllInstanceVariables sub -- Also returns parents variables, in correct order, i.e. 1st parent 1st etc, for codegenerator later.
      emptyContext
      mapM_ (\(t',x) -> addVar t' x) iVars
 
+     checkMethodsNotOverride sub
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
      meths' <- mapM (checkClassMeth sub iVars) meths
-     let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
+     iVars' <- resolveInstanceVariableTypes iVars
      return (EClassDef sub base (iVars' ++ meths'))
+
+resolveInstanceVariableTypes :: [(DType, Id)] -> S [CDecl]
+resolveInstanceVariableTypes iVars =
+  do let attrT = [ t | (t, id') <- iVars ]
+     let attrId = [ id' | (t, id') <- iVars ]
+     attrT' <- mapM resolveType attrT
+     let zipped = zip attrT' attrId
+     let resolved = [ CDeclA (t,id') | (t,id') <- zipped ]
+     return resolved
      
 
 -- ClassName -> Instance variables -> Method
@@ -108,6 +110,7 @@ checkClassMeth cid iVars (CDeclM (FctDef t mid args (CStmt ss))) =
   do emptyContext
      setReturnType t
      mapM_ (\(t',x) -> addVar t' x) iVars -- Instance variables
+
      pushScope -- In case we get as a parameter "x" when x is also a instance variable
      mapM_ (\(t',x) -> addVar t' x) [(t', x) | (Arg t' x) <- args] -- Parameters
      (ps,rt) <- lookupMethod cid mid
@@ -355,13 +358,19 @@ checkVar typ x err = do typ2 <- lookupVar x
                           else fail $ err ++ ": Expected " ++ show typ ++ ", got " ++ show typ2
 
 checkExpr :: Types -> Expr -> ErrStr -> S Expr
-checkExpr typs exp err = do ae@(AExpr t _) <- inferExpr exp
-                            if elem t typs then return ae
-                               else case t of
-                                      TIdent c -> do let (TIdent base) = (head typs) -- Subtyping, we know that typs here always only contain just one type
-                                                     checkIsParent base c
-                                                     return ae
-                                      _        -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
+checkExpr typs exp err = 
+  do ae@(AExpr t _) <- inferExpr exp
+     if elem t typs then return ae
+                    else case t of
+                      TIdent c -> do isClass <- checkIsClass c
+                                     case isClass of
+                                       True  -> do let (TIdent base) = (head typs) -- Subtyping, we know that typs here always only contain just one type
+                                                   b <- checkIsParent base c
+                                                   case b of
+                                                     True  -> return ae
+                                                     False -> fail $ err ++ ": Class " ++ c ++ " is not extending class " ++ base
+                                       False -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
+                      _        -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
 
 inferBinOp :: Expr -> Expr -> Types -> ErrStr -> S (DType, Expr, Expr)
 inferBinOp e1 e2 typs err = do ae1@(AExpr t1 _) <- inferExpr e1
