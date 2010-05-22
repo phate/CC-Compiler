@@ -94,7 +94,7 @@ cvtExprs []     = []
 cvtExprs (e:es) = (cvtExpr e):(cvtExprs es)
 
 cvtExpr :: Expr -> Expr
-cvtExpr (AExpr t (EId x)) = (AExpr t (EPtr (AExpr (TIdent "Node") (EId "_this")) x)) --Need to check env here whether its instance variable or not...
+cvtExpr (AExpr t (EId x)) = (AExpr t (EPtr (AExpr (TIdent "") (EId "_this")) x)) --Need to check env here whether its instance variable or not...
 cvtExpr (AExpr t (EDot e@(AExpr (TIdent cid) _) (AExpr _ (EApp mid es)))) = (AExpr t (EApp ("_" ++ cid ++ "_" ++ mid) ((cvtExpr e):(cvtExprs es))))
 cvtExpr (AExpr t ESelf) = (AExpr t (EId "_this"))
 
