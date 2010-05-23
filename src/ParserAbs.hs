@@ -79,9 +79,6 @@ data Type =
     TInt
   | TDouble
   | TBool
---  | TVoid
---	| TString
---  | TStringP
   deriving (Eq, Show)
 
 data Expr =

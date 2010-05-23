@@ -1,20 +1,20 @@
 TODO:
------
--- ARRAYS1B
-returnArray (Compute length only once)
-UnreachableInsteadOfRetVoid (Should be ret void and not unreachable)
-
-
--- coreB
-phi.jl
-phi2.jl
-unreachableWhile
-
-
 ---------------------
-CIRCULAR DEPENDENCIES
-EMPTY CLASSES/STRUCTS
-4 SHIFT/REDUCE
-PARSE ERRORS >> stderr
-Internal happy error????
+FIX PHI INSTRUCTION FOR EAND and EOR:
+	true && (true || false) works but not true && true || false ( i.e. (true && true) || false )
+
+
+CHECK CIRCULAR DEPENDENCIES
+
+ALLOW EMPTY CLASSES/STRUCTS
+
+REDUCE OUR 4 SHIFT/REDUCE OR EXPLAIN WHY THEY ARE HARMLESS
+
+WRITE DOCUMENTATION
+
+ERRORS:
+	PARSE ERRORS >> stderr
+	INTERNAL HAPPY ERROR >> stderr
+        CODE GENERATION ERRORS >> stderr
+
 ---------------------

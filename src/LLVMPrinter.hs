@@ -46,9 +46,6 @@ sepArgs s = sepArgs' s []
         sepArgs' (x:[]) ss = concat $ reverse $ x:ss
         sepArgs' (x:xs) ss = sepArgs' xs ((x++", "):ss)
 
---printInstructions :: [LLVMInstr] -> [String]
---printInstructions instr = undefined
-
 
 
 printInstructions :: [LLVMInstr] -> [String]
@@ -110,7 +107,5 @@ printDType (TString) = "i8"
 
 printDType (TArr t i) = "[ 0 x " ++ printDType (DType t i) ++ "]*"
 printDType (DType t i) = "{i32, [ 0 x " ++ (printDType (DType t (i-1))) ++ "] }*"
---printDType t | t == TVoid      = "void"
---printDType t | t == TString    = "i8"
---printDType t | t == TStringP   = "i8*"
+
 

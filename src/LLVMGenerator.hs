@@ -16,11 +16,6 @@ genDefs defs = do mapM_ insertStruct [ s | (SDef s) <- defs ]
   where
     insertStruct (StrDef id decls) = addStruct id [ (id', t) | (t, id') <- decls ]
 
-
---genDefs :: [Def] -> S()
---genDefs []            = return ()
---genDefs ((FDef f):ds) = genFctDef f
-
 genFctDef :: FctDef -> S()
 genFctDef (FctDef t id args (CStmt ss)) = do  let ps = [ (t,i) | Arg t i <- args]
                                               newFct t id ps
@@ -30,7 +25,7 @@ genFctDef (FctDef t id args (CStmt ss)) = do  let ps = [ (t,i) | Arg t i <- args
                                               linstr <- getLastInstr
                                               case linstr of
                                                 (LLLabel "lab0")  -> addInstr LLVReturn
-                                                (LLLabel _)       -> addInstr Unreachable
+                                                (LLLabel _)       -> if t == TVoid then (addInstr LLVReturn) else (addInstr Unreachable) -- Naive for void fct
                                                 _                 -> if t == TVoid then (addInstr LLVReturn) else return () -- Naive for void fct
                                           where
                                               genParams (t,i) = do  (lid,_) <- lookupVar i
@@ -174,12 +169,14 @@ genStmt (SWhile e s) = do lbegin <- createLabel
                           addInstr (LLBr lbegin)
                           addInstr (LLLabel lfalse)
 
-genStmt (SFor t id e s) = 
+genStmt (SFor t id e@(AExpr t' _) s) = 
   do pushScope
      genStmts [
        (SDecl (DType TInt 0) [Init "_iC" (AExpr (DType TInt 0) (EInteger 0))]), -- int _iC = 0
-       (SWhile (AExpr (DType TBool 0) (ERel (AExpr (DType TInt 0) (EId "_iC")) Lth (AExpr (DType TInt 0) (EDot e (EId "length")))))) (SCStmt (CStmt [ --(while _iC < e.length)
-       (SDecl t [Init id (AExpr t (EIndex e [(AExpr (DType TInt 0) (EId "_iC"))]))]), -- int([]) id = e([])[_iC]
+       (SDecl t' [Init "_array" e]), -- store array
+       (SDecl (DType TInt 0) [Init "_length" (AExpr (DType TInt 0) (EDot (AExpr t' (EId "_array")) (EId "length")))]), -- int _length = _array.length
+       (SWhile (AExpr (DType TBool 0) (ERel (AExpr (DType TInt 0) (EId "_iC")) Lth (AExpr (DType TInt 0) (EId "_length"))))) (SCStmt (CStmt [ --(while _iC < _length)
+       (SDecl t [Init id (AExpr t (EIndex (AExpr t' (EId "_array")) [(AExpr (DType TInt 0) (EId "_iC"))]))]), -- int([]) id = _array([])[_iC]
        s, -- statements
        (SIncr "_iC")]))] -- _iC++
      popScope
@@ -196,10 +193,6 @@ genExp (AExpr t (EDouble  d)) = return (t, (ODouble d))
 genExp (AExpr t ETrue)        = return (t, (OInteger 1))
 genExp (AExpr t EFalse)       = return (t, (OInteger 0))
 
---genExp (AExpr t (EApp f es))  = do  ps <- mapM genExp es
---                                    lid <- createLLVMId
---                                    addInstr (LLCall (OId lid) t f ps)
---                                    return (t,(OId lid))
 genExp (AExpr t (EAppTypes f es ts))  = 
   do ps <- genEAppTypes es ts
      lid <- createLLVMId
@@ -401,22 +394,6 @@ genExp (AExpr t@(DType TInt 0) (EDot e (EId "length"))) =
      lid' <- createLLVMId
      addInstr (LLLoad (OId lid') t lid)
      return (t, (OId lid'))
-
-
-{-
-genExp (AExpr t (EDot e1@(AExpr (TIdent cid) _) (AExpr _ (EApp mid es)))) = 
-  do let cid' = cid
-     genExp (AExpr t (EApp ("_" ++ cid ++ "_" ++ mid) (e1:es)))
-
-
-
-genExp (AExpr (TIdent i) ESelf) = do (lid,t) <- lookupVar "_this"
-                                     lid' <- createLLVMId
-                                     addInstr (LLLoad (OId lid') t lid)
-                                     return (t, (OId lid'))
--}
-     
-
 
 
 genExp e = error $ "ERROR: " ++ (show e)

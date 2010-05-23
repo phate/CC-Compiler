@@ -21,10 +21,9 @@ check s file = let tree = parse $ alexScanTokens s in
     case typecheck tree of
     Ok (p,tcenv) -> do
                     hPutStrLn stderr "OK"
-                    putStrLn (show p)
-                    putStrLn (show $ desugar p tcenv)
+                    --putStrLn (show p)
+                    --putStrLn (show $ desugar p tcenv)
                     let llvmenv = generateInstructions (desugar p tcenv)
-                    --let llvmenv = generateInstructions p
                     let code = getCode llvmenv
                     writeFile (file ++ ".ll") code
                     system $ "llvm-as -f " ++ file ++ ".ll" ++ "&& llvm-ld lib/runtime.bc " ++ file ++ ".bc"

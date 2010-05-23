@@ -1,6 +1,6 @@
 all: llvm
 
-llvm: llvmr ParserAbs.o Desugarer.o ErrM.o TypeCheckerEnv.o TypeChecker.o LLVMAbs.o LLVMEnv.o LLVMGenerator.o LLVMPrinter.o Parser.o Scanner.o jlc.o
+llvm: llvmr ParserAbs.o ErrM.o TypeCheckerEnv.o Desugarer.o TypeChecker.o LLVMAbs.o LLVMEnv.o LLVMGenerator.o LLVMPrinter.o Parser.o Scanner.o jlc.o
 	ghc --make jlc
 	mv jlc ../
 

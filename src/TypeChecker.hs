@@ -104,7 +104,7 @@ checkClassMeth cid iVars (CDeclM (FctDef t mid args (CStmt ss))) =
      setReturnType t
      mapM_ (\(t',x) -> addVar t' x True) iVars -- Instance variables
 
-     pushScope -- In case we get as a parameter "x" when x is also a instance variable
+     pushScope
      mapM_ (\(t',x) -> addVar t' x False) [(t', x) | (Arg t' x) <- args] -- Parameters
      (ps,rt) <- lookupMethod cid mid
      let args' = zipWith Arg ps [id | (Arg _ id) <- args]
@@ -228,7 +228,6 @@ checkStmt s@(SFor t _ _ _) ret = fail $ (show s) ++ ": Error in for declaration:
 inferExpr :: Expr -> S Expr
 inferExpr exp = case exp of
   EId x           -> do (t,b) <- lookupVar x
- --                       return (AExpr t exp)
                         return (AExpr t (EIdBool x b))
 
   EInteger i      -> return (AExpr (DType TInt 0) exp)
@@ -367,7 +366,7 @@ checkExpr typs exp err =
                                                      TIdent base -> do b <- checkIsParent base c
                                                                        case b of
                                                                          True  -> return ae
-                                                                         False -> fail $ err ++ ": Class " ++ c ++ " is not extending class " ++ base
+                                                                         False -> fail $ err ++ ": Class " ++ c ++ " is not extending any class " ++ base
                                                      _           -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
                                        False -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
                       _        -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t

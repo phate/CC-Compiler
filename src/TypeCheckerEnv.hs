@@ -10,14 +10,11 @@ import Data.Map
 
 type Env      = (Sig, [Context])
 type Sig	    = Map Id ([DType], DType)
---type Context	= Map Id DType
 type Context	= Map Id (DType, Bool) -- bool: attribute or not
 
 type Struct     = [(Id, DType)]
 type Structs    = Map Id Struct
 type PtrTypeDefs = Map Id Id -- Maps a type defined pointer to the corresponding struct
-
---type Classes    = Map Id [DType] -- CHANGE THIS LATER
 
 type ErrStr  = String
 type Types   = [DType]
@@ -111,17 +108,7 @@ popScope = do s <- get
               let (sig, (scope:rest)) = env $ tcFctEnv s
               put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, rest) } }
 
-{-
-addVar :: DType -> Id -> S ()
-addVar typ x =
-  do s <- get
-     let (sig, (scope:rest)) = env $ tcFctEnv s
-     case member x scope of
-       False -> do
-		  typ' <- resolveType typ               
-                  put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x typ' scope):rest)) } }
-       True  -> fail $ "Variable " ++ x ++ " was already declared in this scope"
--}
+
 addVar :: DType -> Id -> Bool -> S ()
 addVar typ x attr=
   do s <- get
@@ -132,17 +119,7 @@ addVar typ x attr=
                   put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x (typ', attr) scope):rest)) } }
        True  -> fail $ "Variable " ++ x ++ " was already declared in this scope"
 
-{-
-lookupVar :: Id -> S DType
-lookupVar x = do s <- get
-                 let (sig, (scope:rest)) = env $ tcFctEnv s
-                 lookupVar' (scope:rest) where
-                   lookupVar' :: [Context] -> S DType
-                   lookupVar' []     = fail $ "Variable " ++ x ++ " not found"
-                   lookupVar' (c:cs) = case Data.Map.lookup x c of
-                                         Nothing  -> lookupVar' cs
-                                         Just typ -> return typ
--}
+
 lookupVar :: Id -> S (DType, Bool)
 lookupVar x = do s <- get
                  let (sig, (scope:rest)) = env $ tcFctEnv s
@@ -217,29 +194,7 @@ addMethod cid mid (ps,rt) =
                                    let cEnv = TCClassEnv{ methods = mths', attributes = attr }
                                    let cDefs' = adjust (\x -> cEnv) cid cDefs
                                    put $ s { tcClassEnv = cDefs' }
-                  
-{-
-addMethod :: Id -> Id -> ([DType],DType) -> S()
-addMethod cid mid (ps,rt) = do  s <- get
-                                let cenv = 
-                                case Data.Map.lookup cid $ tcClassEnv s of
-                                  Nothing -> fail $ "Class " ++ cid ++ " not declared"
-                                  Just r  -> do let mths = methods $ r
-                                                let (sig, const) = env $ mths
-                                                ps' <- mapM resolveType ps
-                                                rt' <- resolveType rt
-                                                case member mid sig of
-                                                  True  -> fail $ "Function " ++ mid ++ " multiple declared"
-                                                  False -> put $ s { tcClassEnv = (tcClassEnv s){ methods = mths { env = (insert mid (ps',rt') sig, const) } } }
---                                let (sig, cont) = env $ methods $ Data.Map.lookup cid $ tcClassEnv s
---                                ps' <- mapM resolveType ps
---                                rt' <- resolveType rt
---                                case member id sig of
---                                  True  -> fail $ "Function " ++ id ++ " multiple declared" 
---                                  False -> put $ s { tcClassEnv = (tcClassEnv s){ methods = (methods $ tcClassEnv s){ env = (insert id (ps',rt') sig, cont) } } }
 
--- This function is used for ENew
--}
 
 lookupStructClass :: Id -> S DType
 lookupStructClass id = do s <- get
@@ -376,19 +331,3 @@ lookupClassForMethod e cid mid =
     cDefs = tcClassEnv e
     subBase = sub2Base e
 
-{-
-
-lookupMethod cid mid = 
-  do s <- get
-     let cDefs = tcClassEnv s
-     let subBase = sub2Base s
-     case Data.Map.lookup cid cDefs of
-       Nothing -> fail $ "Class " ++ cid ++ " not found"
-       Just c  -> do let mths = methods c
-                     let (sig, cont) = env mths
-                     case Data.Map.lookup mid sig of
-                       Just ret -> return ret
-                       Nothing  -> case Data.Map.lookup cid subBase of
-                                     Nothing   -> fail $ "Method " ++ mid ++ " not found"
-                                     Just base -> lookupMethod base mid 
-   -}
