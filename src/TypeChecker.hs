@@ -22,6 +22,7 @@ setupDefs ds = do let strDefs  = [ s | (SDef s) <- ds ]
                   mapM_ insertTypeDef typeDefs
                   mapM_ insertClass cDefs
                   mapM_ insertSubClass eCDefs
+                  mapM_ checkNoCircularExtending [ sub | (EClassDef sub base cdecls) <- eCDefs]
                   mapM_ insertFunction fctDefs
                   mapM_ insertClassMethods cDefs
                   mapM_ insertSubClassMethods eCDefs

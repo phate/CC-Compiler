@@ -314,6 +314,19 @@ checkMethodsNotOverride id = cMNO id [] where
                          Just b  -> cMNO b (funs ++ cFuns)
 
 
+checkNoCircularExtending :: Id -> S ()
+checkNoCircularExtending id = cNCE id []
+  where
+    cNCE id' added = 
+      do s <- get
+         let subBase = sub2Base s
+         case Data.Map.lookup id' subBase of
+           Nothing -> return ()
+           Just b  -> case elem b added of
+                        True  -> fail $ "Circular extending not allowed"
+                        False -> cNCE b (b:added)
+       
+
 -- Returns the class in which a method exist (since it may be in base class) Non monadic for desugarer
 lookupClassForMethod :: TCEnv -> Id -> Id -> Id
 lookupClassForMethod e cid mid = 
