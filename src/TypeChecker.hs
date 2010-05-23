@@ -10,13 +10,6 @@ typecheck (Program defs) = do (defs', env) <- runStateT (setupDefs defs) newTCEn
                               return ((Program defs'), env)
 
 
-
-{- /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\
-
-	(* CHECK CIRCULAR INHERITANCE) -- NOT A BIG TODO ATM!!
-
-   /////////////////////// TODO \\\\\\\\\\\\\\\\\\\\\\\ -}
-
 setupDefs :: [Def] -> S [Def]
 setupDefs ds = do let strDefs  = [ s | (SDef s) <- ds ]
                   let typeDefs = [ td | (TDef td) <- ds ]
@@ -73,7 +66,7 @@ checkClassDef (ClassDef id cdecls) =
      -- Check no multiple variables
      iVars <- getAllInstanceVariables id
      emptyContext
-     mapM_ (\(t',x) -> addVar t' x) iVars
+     mapM_ (\(t',x) -> addVar t' x True) iVars
 
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
      meths' <- mapM (checkClassMeth id iVars) meths
@@ -86,7 +79,7 @@ checkClassDef (EClassDef sub base cdecls) =
      -- Check no multiple variables
      iVars <- getAllInstanceVariables sub -- Also returns parents variables, in correct order, i.e. 1st parent 1st etc, for codegenerator later.
      emptyContext
-     mapM_ (\(t',x) -> addVar t' x) iVars
+     mapM_ (\(t',x) -> addVar t' x True) iVars
 
      checkMethodsNotOverride sub
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
@@ -109,10 +102,10 @@ checkClassMeth :: Id -> [(DType, Id)] -> CDecl -> S CDecl
 checkClassMeth cid iVars (CDeclM (FctDef t mid args (CStmt ss))) = 
   do emptyContext
      setReturnType t
-     mapM_ (\(t',x) -> addVar t' x) iVars -- Instance variables
+     mapM_ (\(t',x) -> addVar t' x True) iVars -- Instance variables
 
      pushScope -- In case we get as a parameter "x" when x is also a instance variable
-     mapM_ (\(t',x) -> addVar t' x) [(t', x) | (Arg t' x) <- args] -- Parameters
+     mapM_ (\(t',x) -> addVar t' x False) [(t', x) | (Arg t' x) <- args] -- Parameters
      (ps,rt) <- lookupMethod cid mid
      let args' = zipWith Arg ps [id | (Arg _ id) <- args]
      (retOk, ss') <- checkStmts ss False
@@ -134,7 +127,7 @@ checkFctDef (FctDef t id args (CStmt ss)) =
    do emptyContext
       setCheckingClass False ""
       setReturnType t
-      mapM_ (\(t,x) -> addVar t x) [(t',id') | (Arg t' id') <- args]
+      mapM_ (\(t,x) -> addVar t x False) [(t',id') | (Arg t' id') <- args]
       (ps,rt) <- lookupFun id
       let args' = zipWith Arg ps [ id | (Arg _ id) <- args]
       (retOk, ss') <- checkStmts ss False
@@ -158,11 +151,11 @@ checkStmt (SCStmt (CStmt ss)) ret = do  pushScope
 checkStmt (SDecl t vars) ret      = do 	t' <- resolveType t
                                         vars' <- mapM checkDecl vars
                                         return (ret, (SDecl t' vars')) where
-                                          checkDecl (NoInit id)     = do  addVar t id
+                                          checkDecl (NoInit id)     = do  addVar t id False
                                                                           return (NoInit id)
                                           checkDecl x@(Init id exp) = do  t' <- resolveType t
 									  ae <- checkExpr [t'] exp (show x)
-                                                                          addVar t id
+                                                                          addVar t id False
                                                                           return (Init id ae)
 
 checkStmt s@(SAss e1@(EId id) e2) ret = do  ae1@(AExpr t _) <- inferExpr e1
@@ -184,9 +177,11 @@ checkStmt s@(SAss _ _) ret = fail $ (show s) ++ ": Invalid l-value in assignment
 checkStmt (SExp e) ret            = do  ae <- inferExpr e
                                         return (ret, SExp ae)
 checkStmt s@(SIncr x) ret         = do  checkVar (DType TInt 0) x (show s)
-                                        return (ret, SIncr x)
+                                        (_,b) <- lookupVar x
+                                        return (ret, SIncrBool x b)
 checkStmt s@(SDecr x) ret         = do  checkVar (DType TInt 0) x (show s)
-                                        return (ret, SDecr x)
+                                        (_,b) <- lookupVar x
+                                        return (ret, SDecrBool x b)
 checkStmt s@(SRet e) ret          = do  t <- getReturnType
                                         ae <- checkExpr [t] e (show s)
                                         return (True, SRet ae)
@@ -223,7 +218,7 @@ checkStmt (SWhile e s) ret        = do  case e of
 checkStmt (SFor (DType t i) x e s) ret = 
   do ae <- checkExpr [DType t (i+1)] e ("Error in for loop, " ++ (show e))
      pushScope
-     addVar (DType t i) x
+     addVar (DType t i) x False
      (ret', s') <- checkStmt s ret
      popScope
      return (ret', (SFor (DType t i) x ae s'))
@@ -232,8 +227,9 @@ checkStmt s@(SFor t _ _ _) ret = fail $ (show s) ++ ": Error in for declaration:
 
 inferExpr :: Expr -> S Expr
 inferExpr exp = case exp of
-  EId x           -> do t <- lookupVar x
-                        return (AExpr t exp)
+  EId x           -> do (t,b) <- lookupVar x
+ --                       return (AExpr t exp)
+                        return (AExpr t (EIdBool x b))
 
   EInteger i      -> return (AExpr (DType TInt 0) exp)
 
@@ -244,9 +240,10 @@ inferExpr exp = case exp of
   EFalse          -> return (AExpr (DType TBool 0) exp)
 
   EApp fun es     -> do (ts, t) <- lookupFun fun
-                        aes <- sequence [inferExpr e | e <- es ]
-                        ts' <- sequence $ map (\(AExpr t _) -> return t) aes
-                        if ts == ts' then return (AExpr t (EApp fun aes)) else fail $ (show exp) ++ ": Bad arguments"
+                        if (length ts) /= (length es)
+                          then fail $ (show exp) ++ ": Wrong number of arguments"
+                          else do aes <- mapM (\(t',e) -> checkExpr [t'] e (show exp)) (zip ts es)
+                                  return (AExpr t (EAppTypes fun aes ts))
 
   EAppS fun str   -> do (ts, t) <- lookupFun fun
                         if head(ts) == TString then return (AExpr t exp) else fail $ (show exp) ++ ": Bad arguments"
@@ -296,9 +293,10 @@ inferExpr exp = case exp of
     do ae1@(AExpr t' _) <- inferExpr e1
        case t' of
          TIdent cid -> do (ts, t) <- lookupMethod cid mid
-                          aes <- sequence [inferExpr e | e <- es ]
-                          ts' <- sequence $ map (\(AExpr t _) -> return t) aes
-                          if ts == ts' then return (AExpr t (EDot ae1 (AExpr t (EApp mid aes)))) else fail $ (show exp) ++ ": Bad arguments"
+                          if (length ts) /= (length es)
+                            then fail $ (show exp) ++ ": Wrong number of arguments"
+                            else do aes <- mapM (\(t'',e) -> checkExpr [t''] e (show exp)) (zip ts es)
+                                    return (AExpr t (EDot ae1 (AExpr t (EAppTypes mid aes ts))))
          _          -> fail $ (show exp) ++ ": Invalid expression before ."
 
 
@@ -353,7 +351,7 @@ inferExpr exp = case exp of
                         return (AExpr t (EOr ae1 ae2))
 
 checkVar :: DType -> Id -> ErrStr -> S ()
-checkVar typ x err = do typ2 <- lookupVar x
+checkVar typ x err = do (typ2,b) <- lookupVar x
                         if typ == typ2 then return ()
                           else fail $ err ++ ": Expected " ++ show typ ++ ", got " ++ show typ2
 
@@ -364,11 +362,13 @@ checkExpr typs exp err =
                     else case t of
                       TIdent c -> do isClass <- checkIsClass c
                                      case isClass of
-                                       True  -> do let (TIdent base) = (head typs) -- Subtyping, we know that typs here always only contain just one type
-                                                   b <- checkIsParent base c
-                                                   case b of
-                                                     True  -> return ae
-                                                     False -> fail $ err ++ ": Class " ++ c ++ " is not extending class " ++ base
+                                       True  -> do let t' = (head typs) -- Subtyping, we know that typs here always only contain just one type
+                                                   case t' of
+                                                     TIdent base -> do b <- checkIsParent base c
+                                                                       case b of
+                                                                         True  -> return ae
+                                                                         False -> fail $ err ++ ": Class " ++ c ++ " is not extending class " ++ base
+                                                     _           -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
                                        False -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
                       _        -> fail $ err ++ ": Expected " ++ show typs ++ ", got " ++ show t
 

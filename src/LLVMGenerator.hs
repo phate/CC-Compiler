@@ -31,7 +31,7 @@ genFctDef (FctDef t id args (CStmt ss)) = do  let ps = [ (t,i) | Arg t i <- args
                                               case linstr of
                                                 (LLLabel "lab0")  -> addInstr LLVReturn
                                                 (LLLabel _)       -> addInstr Unreachable
-                                                _                 -> return ()
+                                                _                 -> if t == TVoid then (addInstr LLVReturn) else return () -- Naive for void fct
                                           where
                                               genParams (t,i) = do  (lid,_) <- lookupVar i
                                                                     let plid = createPLLVMId lid
@@ -195,10 +195,25 @@ genExp (AExpr t (EInteger i)) = return (t, (OInteger i))
 genExp (AExpr t (EDouble  d)) = return (t, (ODouble d))
 genExp (AExpr t ETrue)        = return (t, (OInteger 1))
 genExp (AExpr t EFalse)       = return (t, (OInteger 0))
-genExp (AExpr t (EApp f es))  = do  ps <- mapM genExp es
-                                    lid <- createLLVMId
-                                    addInstr (LLCall (OId lid) t f ps)
-                                    return (t,(OId lid))
+
+--genExp (AExpr t (EApp f es))  = do  ps <- mapM genExp es
+--                                    lid <- createLLVMId
+--                                    addInstr (LLCall (OId lid) t f ps)
+--                                    return (t,(OId lid))
+genExp (AExpr t (EAppTypes f es ts))  = 
+  do ps <- genEAppTypes es ts
+     lid <- createLLVMId
+     addInstr (LLCall (OId lid) t f ps)
+     return (t,(OId lid))
+  where -- Subtyping
+    genEAppTypes [] []             = return []
+    genEAppTypes (e':es') (t':ts') = do (t'',v) <- genExp e'
+                                        lid' <- createLLVMId
+                                        addInstr (LLBitcast (OId lid') t'' v t')
+                                        aes <- genEAppTypes es' ts'
+                                        return ((t', (OId lid')):aes)
+                                        
+
 genExp (AExpr t (EAppS f str))  = do  id <- addGlobString str 
                                       lid <- createLLVMId
                                       addInstr (LLGetElemPtrString (OId lid) ((length str)+1) TString id)

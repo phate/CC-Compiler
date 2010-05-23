@@ -22,8 +22,8 @@ check s file = let tree = parse $ alexScanTokens s in
     Ok (p,tcenv) -> do
                     hPutStrLn stderr "OK"
                     putStrLn (show p)
-                    putStrLn (show $ desugar p)
-                    let llvmenv = generateInstructions (desugar p)
+                    putStrLn (show $ desugar p tcenv)
+                    let llvmenv = generateInstructions (desugar p tcenv)
                     --let llvmenv = generateInstructions p
                     let code = getCode llvmenv
                     writeFile (file ++ ".ll") code

@@ -10,7 +10,8 @@ import Data.Map
 
 type Env      = (Sig, [Context])
 type Sig	    = Map Id ([DType], DType)
-type Context	= Map Id DType
+--type Context	= Map Id DType
+type Context	= Map Id (DType, Bool) -- bool: attribute or not
 
 type Struct     = [(Id, DType)]
 type Structs    = Map Id Struct
@@ -110,6 +111,7 @@ popScope = do s <- get
               let (sig, (scope:rest)) = env $ tcFctEnv s
               put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, rest) } }
 
+{-
 addVar :: DType -> Id -> S ()
 addVar typ x =
   do s <- get
@@ -119,12 +121,33 @@ addVar typ x =
 		  typ' <- resolveType typ               
                   put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x typ' scope):rest)) } }
        True  -> fail $ "Variable " ++ x ++ " was already declared in this scope"
+-}
+addVar :: DType -> Id -> Bool -> S ()
+addVar typ x attr=
+  do s <- get
+     let (sig, (scope:rest)) = env $ tcFctEnv s
+     case member x scope of
+       False -> do
+		  typ' <- resolveType typ               
+                  put $ s { tcFctEnv = (tcFctEnv s) { env = (sig, ((insert x (typ', attr) scope):rest)) } }
+       True  -> fail $ "Variable " ++ x ++ " was already declared in this scope"
 
+{-
 lookupVar :: Id -> S DType
 lookupVar x = do s <- get
                  let (sig, (scope:rest)) = env $ tcFctEnv s
                  lookupVar' (scope:rest) where
                    lookupVar' :: [Context] -> S DType
+                   lookupVar' []     = fail $ "Variable " ++ x ++ " not found"
+                   lookupVar' (c:cs) = case Data.Map.lookup x c of
+                                         Nothing  -> lookupVar' cs
+                                         Just typ -> return typ
+-}
+lookupVar :: Id -> S (DType, Bool)
+lookupVar x = do s <- get
+                 let (sig, (scope:rest)) = env $ tcFctEnv s
+                 lookupVar' (scope:rest) where
+                   lookupVar' :: [Context] -> S (DType, Bool)
                    lookupVar' []     = fail $ "Variable " ++ x ++ " not found"
                    lookupVar' (c:cs) = case Data.Map.lookup x c of
                                          Nothing  -> lookupVar' cs
@@ -336,5 +359,36 @@ checkMethodsNotOverride id = cMNO id [] where
                          Just b  -> cMNO b (funs ++ cFuns)
 
 
+-- Returns the class in which a method exist (since it may be in base class) Non monadic for desugarer
+lookupClassForMethod :: TCEnv -> Id -> Id -> Id
+lookupClassForMethod e cid mid = 
+  case Data.Map.lookup cid cDefs of
+    Nothing -> fail $ "Class " ++ cid ++ " not found"
+    Just c  -> case Data.Map.lookup mid sig of
+                 Just r -> cid
+                 Nothing -> case Data.Map.lookup cid subBase of
+                              Nothing   -> fail $ "Method " ++ mid ++ " not found"
+                              Just base -> lookupClassForMethod e base mid
+               where
+                 meths = methods c
+                 (sig, _) = env (methods c)
+  where
+    cDefs = tcClassEnv e
+    subBase = sub2Base e
 
-     
+{-
+
+lookupMethod cid mid = 
+  do s <- get
+     let cDefs = tcClassEnv s
+     let subBase = sub2Base s
+     case Data.Map.lookup cid cDefs of
+       Nothing -> fail $ "Class " ++ cid ++ " not found"
+       Just c  -> do let mths = methods c
+                     let (sig, cont) = env mths
+                     case Data.Map.lookup mid sig of
+                       Just ret -> return ret
+                       Nothing  -> case Data.Map.lookup cid subBase of
+                                     Nothing   -> fail $ "Method " ++ mid ++ " not found"
+                                     Just base -> lookupMethod base mid 
+   -}

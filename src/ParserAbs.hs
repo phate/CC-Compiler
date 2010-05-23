@@ -49,7 +49,9 @@ data Stmt =
   | SDecl DType [Item]
   | SAss Expr Expr
   | SIncr Id
+  | SIncrBool Id Bool --Attribute or not
   | SDecr Id
+  | SDecrBool Id Bool --Attribute or not
   | SRet Expr
   | SVRet
   | SIf Expr Stmt
@@ -84,11 +86,13 @@ data Type =
 
 data Expr =
     EId Id
+  | EIdBool Id Bool -- attribute or not
   | EInteger Integer
   | EDouble Double
   | ETrue
   | EFalse
   | EApp Id [Expr]
+  | EAppTypes Id [Expr] [DType]
   | EAppS Id String
   | EIndex Expr [Expr]
   | EDot Expr Expr

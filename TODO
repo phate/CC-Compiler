@@ -1,24 +1,20 @@
 TODO:
 -----
-
-TypeChecker:
-	Function application subtyping
-        EDot subtyping
-
+-- ARRAYS1B
+returnArray (Compute length only once)
+UnreachableInsteadOfRetVoid (Should be ret void and not unreachable)
 
 
-LLVMGenerator:
-	Function application subtyping (bitcast)
-    	Make it possible to not have return statement in void function (Without return; it fails atm)
-
-Desugarer:
-	Instance variables vs local in methods (Need to know what to use and when)
-	Declaration statements in both methods and functions
-	Increase/Decrease (id++, id--) in methods
-        self.XX(), need to know where XX() is since it can be in a base class
-   
-
-ANYTHING ELSE???
+-- coreB
+phi.jl
+phi2.jl
+unreachableWhile
 
 
-
+---------------------
+CIRCULAR DEPENDENCIES
+EMPTY CLASSES/STRUCTS
+4 SHIFT/REDUCE
+PARSE ERRORS >> stderr
+Internal happy error????
+---------------------
