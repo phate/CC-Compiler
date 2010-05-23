@@ -70,14 +70,13 @@ Def         : FctDef                                        { FDef $1 }
             | ClassDef                                      { CDef $1 }
 ClassDef    : 'class' id '{' ListCDecl '}' 		              { ClassDef $2 $4 }
             | 'class' id 'extends' id '{' ListCDecl '}'			{ EClassDef $2 $4 $6 }
-ListCDecl   : FctDef                                        { (:[]) (CDeclM $1) }
-            | TId ';'                              	        { (:[]) (CDeclA $1) }
-            | ListCDecl FctDef                              { (:) (CDeclM $2) $1 }
-            | ListCDecl TId ';'                       	    { (:) (CDeclA $2) $1 }
+ListCDecl		: {- empty -}																		{ [] }
+						| FctDef ListCDecl															{ (:) (CDeclM $1) $2 }
+            | TId ';' ListCDecl															{ (:) (CDeclA $1) $3 }
 TypeDef     : 'typedef' 'struct' id '*' id ';'              { TypeDef $3 $5 }
 StrDef      : 'struct' id '{' ListTId '}' ';'               { StrDef $2 $4 }
-ListTId     : TId ';'                                       { (:[]) $1 }
-            | TId ';' ListTId                               { (:) $1 $3 }
+ListTId			: {- empty -}																		{ [] }
+						| TId ';' ListTId																{ (:) $1 $3 }
 FctDef			: TId '(' LListArg ')' CmpStmt		              { FctDef (fst $1) (snd $1) $3 $5 }
 LListArg    : {- empty -}                                   { [] }
             | ListArg                                       { $1 }                  

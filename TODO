@@ -3,8 +3,6 @@ TODO:
 FIX PHI INSTRUCTION FOR EAND and EOR: -- GÖRA IDAG!
 	true && (true || false) works but not true && true || false ( i.e. (true && true) || false )
 
-ALLOW EMPTY CLASSES/STRUCTS -- GÖRA IDAG!
-
 REDUCE OUR 4 SHIFT/REDUCE OR EXPLAIN WHY THEY ARE HARMLESS -- GÖRA IDAG!
 
 WRITE DOCUMENTATION
