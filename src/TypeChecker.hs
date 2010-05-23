@@ -72,7 +72,6 @@ checkClassDef (ClassDef id cdecls) =
      let meths = [ f | f@(CDeclM (FctDef t id' args (CStmt ss))) <- cdecls ]
      meths' <- mapM (checkClassMeth id iVars) meths
      iVars' <- resolveInstanceVariableTypes iVars
-     let iVars' = [ CDeclA (t,id') | (t,id') <- iVars ]
      return (ClassDef id (iVars' ++ meths'))
 
 checkClassDef (EClassDef sub base cdecls) =
