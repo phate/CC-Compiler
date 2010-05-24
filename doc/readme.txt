@@ -11,27 +11,39 @@ rest denotes terminales, whereas words enclosed in single quotation
 marks are matched literally and the other ones, like id, double, etc.
 according to their definition in the project description.
 
-UPDATE GRAMMAR HERE!!!!!
-
-Program     : ListFctDef
-ListFctDef  : FctDef
-            | FctDef ListFctDef
-FctDef      : Type id '(' ListArg ')' CmpStmt
-ListArg     : {- empty -}
-            | Arg
-            | Arg ',' ListArg
-Arg         : Type id
+Program     : ListDef
+ListDef     : Def
+            | Def ListDef
+Def         : FctDef
+            | StrDef
+            | TypeDef
+            | ClassDef
+ClassDef    : 'class' id '{' ListCDecl '}'
+            | 'class' id 'extends' id '{' ListCDecl '}'
+ListCDecl   : {- empty -}
+            | FctDef ListCDecl
+            | TId ';' ListCDecl
+TypeDef     : 'typedef' 'struct' id '*' id ';'
+StrDef      : 'struct' id '{' ListTId '}' ';'
+ListTId     : {- empty -}
+            | TId ';' ListTId
+FctDef      : TId '(' LListArg ')' CmpStmt
+LListArg    : {- empty -}
+            | ListArg
+ListArg     : TId
+            | TId ',' ListArg
 CmpStmt     : '{' ListStmt '}'
 ListStmt    : {- empty -}
             | ListStmt Stmt
 Stmt        : ';'
             | CmpStmt
             | Type ListItem ';'
-            | id '=' Expr ';'
+            | Expr '=' Expr ';'
             | id '++' ';'
             | id '--' ';'
             | 'return' Expr ';'
             | 'return' ';'
+            | 'for' '(' Type id ':' Expr ')' Stmt
             | 'if' '(' Expr ')' Stmt
             | 'if' '(' Expr ')' Stmt 'else' Stmt
             | 'while' '(' Expr ')' Stmt
@@ -40,10 +52,18 @@ ListItem    : Item
             | Item ',' ListItem
 Item        : id
             | id '=' Expr
-Type        : 'int'
-            | 'double'
-            | 'boolean'
+TId         : 'int' ListSB id
+            | 'double' ListSB id
+            | 'boolean' ListSB id
+            | 'void' id
+            | id id
+Type        : 'int' ListSB
+            | 'double' ListSB
+            | 'boolean' ListSB
             | 'void'
+            | id
+ListSB      : {- empty -}
+            | '['']' ListSB
 Expr        : Expr1 '||' Expr
             | Expr1
 Expr1       : Expr2 '&&' Expr1
@@ -54,10 +74,21 @@ Expr3       : Expr3 AddOp Expr4
             | Expr4
 Expr4       : Expr4 MulOp Expr5
             | Expr5
-Expr5       : '!' Expr6
-            | '-' Expr6
+Expr5       : 'new' 'int' ListIdx
+            | 'new' 'double' ListIdx
+            | 'new' 'boolean' ListIdx
+            | 'new' id
             | Expr6
-Expr6       : id '(' string ')'
+Expr6       : '!' Expr7
+            | '-' Expr7
+            | Expr7
+Expr7       : Expr7 '.' Expr8
+            | Expr8
+Expr8       : 'self'
+            | '(' id ')' 'null'
+            | Expr8 '->' id
+            | Expr8 ListIdx
+            | id '(' string ')'
             | id '(' ListExpr ')'
             | 'false'
             | 'true'
@@ -65,6 +96,9 @@ Expr6       : id '(' string ')'
             | integer
             | id
             | '(' Expr ')'
+ListIdx     : '[' Expr3 ']' ListIdx2
+ListIdx2    : {- empty -}
+            | '[' Expr3 ']' ListIdx2
 ListExpr    : {- empty -}
             | Expr
             | Expr ',' ListExpr
@@ -80,12 +114,13 @@ RelOp       : '<'
             | '=='
             | '!='
 
+
+
 Shift/reduce conflicts:
 This grammar produces 4 shift/reduce conflicts:
   * Dangling else: Since the parser happy always chooses a shift over an reduce, this is no problem.
-  * ???:
-  * ???:
-  * ???:
+  * ( Ident ) null vs ( Exp ):
+  * Indexing (2 shift/reduce, why??) Expr8 [ Expr3 ] (Expr8 ListIdx):
 
 Features implemented:
 The following extensions have been implemented:

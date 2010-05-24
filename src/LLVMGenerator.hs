@@ -217,8 +217,8 @@ genExp (AExpr t (ENot e)) = do  (_,v) <- genExp e
                                 lid <- createLLVMId
                                 addInstr (LLXor (OId lid) v (OInteger 1))
                                 return (t,(OId lid))
-genExp (AExpr t (EAnd e1 e2)) = do  lastLabel <- getLastLabel
-                                    (_,v1) <- genExp e1
+genExp (AExpr t (EAnd e1 e2)) = do  (_,v1) <- genExp e1
+                                    lastLabel <- getLastLabel
                                     lfalse <- createLabel
                                     ltrue <- createLabel
                                     addInstr (LLCBr v1 ltrue lfalse)
@@ -232,8 +232,8 @@ genExp (AExpr t (EAnd e1 e2)) = do  lastLabel <- getLastLabel
                                     lid' <- createLLVMId
                                     addInstr (LLPhi (OId lid') (DType TBool 0) (((OInteger 0),lastLabel),((OId lid),lastLabel')) )
                                     return (t,(OId lid'))
-genExp (AExpr t (EOr e1 e2)) = do lastLabel <- getLastLabel
-                                  (_,v1) <- genExp e1
+genExp (AExpr t (EOr e1 e2)) = do (_,v1) <- genExp e1
+                                  lastLabel <- getLastLabel
                                   lfalse <- createLabel
                                   ltrue <- createLabel
                                   addInstr (LLCBr v1 ltrue lfalse)

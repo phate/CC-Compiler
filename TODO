@@ -1,13 +1,7 @@
 TODO:
 ---------------------
-FIX PHI INSTRUCTION FOR EAND and EOR:
-	true && (true || false) works but not true && true || false ( i.e. (true && true) || false )
-
-REDUCE OUR 4 SHIFT/REDUCE OR EXPLAIN WHY THEY ARE HARMLESS
-
 ERRORS:
 	PARSE ERRORS >> stderr
 	INTERNAL HAPPY ERROR >> stderr
         CODE GENERATION ERRORS >> stderr
-
 ---------------------
