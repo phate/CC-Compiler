@@ -1,7 +1,0 @@
-TODO:
----------------------
-ERRORS:
-	PARSE ERRORS >> stderr
-	INTERNAL HAPPY ERROR >> stderr
-        CODE GENERATION ERRORS >> stderr
----------------------

@@ -83,11 +83,11 @@ Expr6       : '!' Expr7
             | '-' Expr7
             | Expr7
 Expr7       : Expr7 '.' Expr8
+            | Expr8 ListIdx
             | Expr8
 Expr8       : 'self'
             | '(' id ')' 'null'
             | Expr8 '->' id
-            | Expr8 ListIdx
             | id '(' string ')'
             | id '(' ListExpr ')'
             | 'false'
@@ -96,9 +96,8 @@ Expr8       : 'self'
             | integer
             | id
             | '(' Expr ')'
-ListIdx     : '[' Expr3 ']' ListIdx2
-ListIdx2    : {- empty -}
-            | '[' Expr3 ']' ListIdx2
+ListIdx     : '[' Expr ']' ListIdx
+            | '[' Expr ']'
 ListExpr    : {- empty -}
             | Expr
             | Expr ',' ListExpr
@@ -117,10 +116,10 @@ RelOp       : '<'
 
 
 Shift/reduce conflicts:
-This grammar produces 4 shift/reduce conflicts:
+This grammar produces 2 shift/reduce conflicts:
   * Dangling else: Since the parser happy always chooses a shift over an reduce, this is no problem.
-  * ( Ident ) null vs ( Exp ):
-  * Indexing (2 shift/reduce, why??) Expr8 [ Expr3 ] (Expr8 ListIdx):
+  * ( Ident ) null vs ( Exp ): After the parser shifted 'null' on the stack, it will know which rule
+                                it has choose for reduction.
 
 Features implemented:
 The following extensions have been implemented:

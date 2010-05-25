@@ -133,11 +133,11 @@ Expr6				: '!' Expr7														          { ENot $2 }
 						| '-' Expr7														          { ENeg $2 }
 						| Expr7																          { $1 }
 Expr7       : Expr7 '.' Expr8                               { EDot $1 $3 }
+						| Expr8 ListIdx																	{ EIndex $1 $2 }
 						| Expr8																					{ $1 }
 Expr8       : 'self'					                              { ESelf }
             | '(' id ')' 'null'															{ ENull $2 }
 						| Expr8 '->' id                                 { EPtr $1 $3 }
-						| Expr8 ListIdx																	{ EIndex $1 $2 }
 						| id '(' string ')'										          { EAppS $1 (take ((length $3) - 2) (drop 1 $3))}
 						| id '(' ListExpr ')'									          { EApp $1 $3 }
 						| 'false'															          { EFalse }
@@ -146,9 +146,8 @@ Expr8       : 'self'					                              { ESelf }
 						| integer															          { EInteger $1 }
 						| id																	          { EId $1 }
 						| '(' Expr ')'												          { $2 }
-ListIdx     : '[' Expr ']' ListIdx2                         { (:) $2 $4 }
-ListIdx2    : {- empty -}																		{ [] }
-            | '[' Expr ']' ListIdx2													{ (:) $2 $4 }
+ListIdx     : '[' Expr ']' ListIdx                          { (:) $2 $4 }
+            | '[' Expr ']'                                  { (:[]) $2 }
 ListExpr		:	{- empty -}													          { [] }
 						| Expr																          { (:[]) $1 }
 						| Expr ',' ListExpr										          { (:) $1 $3 }
@@ -166,7 +165,7 @@ RelOp				: '<'																	          { Lth }
 {
 
 parseError :: [Token] -> a
-parseError ts = error $ "ERROR" ++ (show ts)
+parseError ts = error $ "ERROR"
 
 data Token
 	= TId	String
