@@ -43,11 +43,13 @@ genStmt (SCStmt (CStmt ss)) = do  pushScope
                                   popScope
 genStmt (SRet e)            = do  (t,v) <- genExp e
                                   
-                                  -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
+                                  -- Subtyping (Naive since it also bitcasts structA to structA etc)
                                   ret <- getReturnType
-                                  lid' <- createLLVMId
-                                  addInstr (LLBitcast (OId lid') t v ret)
-                                  addInstr (LLReturn ret (OId lid'))
+                                  case t of
+                                    TIdent i -> do lid' <- createLLVMId
+                                                   addInstr (LLBitcast (OId lid') t v ret)
+                                                   addInstr (LLReturn ret (OId lid'))
+                                    _        -> addInstr (LLReturn ret v)
 
 genStmt SVRet               = do  addInstr LLVReturn
 
@@ -57,10 +59,12 @@ genStmt SVRet               = do  addInstr LLVReturn
 genStmt (SAss (AExpr t (EId id)) e2) = do (lid,_) <- lookupVar id
                                   	  (t',v) <- genExp e2
 
-                                           -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
-                                          lid' <- createLLVMId
-                                          addInstr (LLBitcast (OId lid') t' v t)
-                                          addInstr (LLStore t (OId lid') (OId lid))
+                                           -- Subtyping (Naive since it also bitcasts structA to structA etc)
+                                          case t' of
+                                            TIdent i -> do lid' <- createLLVMId
+                                                           addInstr (LLBitcast (OId lid') t' v t)
+                                                           addInstr (LLStore t (OId lid') (OId lid))
+                                            _        -> addInstr (LLStore t v (OId lid))
 
 -- EIndex, ie a[3] = 1;. (int a[][], int[] b): a[3] = b etc
 genStmt (SAss e1@(AExpr t (EIndex eid@(AExpr _ (EId id)) es)) e2) =
@@ -115,10 +119,12 @@ genStmt (SDecl t vs) = do   mapM_ genDecl vs
                                                       lid <- addVar x t
                                                       addInstr (LLAlloc (OId lid) t)
 
-                                                      -- Subtyping (Naive since it also bitcasts i32 to i32 etc)
-                                                      lid' <- createLLVMId
-                                                      addInstr (LLBitcast (OId lid') t' v t)
-                                                      addInstr (LLStore t (OId lid') (OId lid))
+                                                      -- Subtyping (Naive since it also bitcasts structA to structA etc)
+                                                      case t' of
+                                                        TIdent i -> do lid' <- createLLVMId
+                                                                       addInstr (LLBitcast (OId lid') t' v t)
+                                                                       addInstr (LLStore t (OId lid') (OId lid))
+                                                        _        -> addInstr (LLStore t v (OId lid))
 
 genStmt (SExp e)            = do  genExp e >> return ()
 genStmt (SIncr x)           = do  (lid,t) <- lookupVar x
@@ -201,10 +207,13 @@ genExp (AExpr t (EAppTypes f es ts))  =
   where -- Subtyping
     genEAppTypes [] []             = return []
     genEAppTypes (e':es') (t':ts') = do (t'',v) <- genExp e'
-                                        lid' <- createLLVMId
-                                        addInstr (LLBitcast (OId lid') t'' v t')
-                                        aes <- genEAppTypes es' ts'
-                                        return ((t', (OId lid')):aes)
+                                        case t'' of
+                                          TIdent i -> do lid' <- createLLVMId
+                                                         addInstr (LLBitcast (OId lid') t'' v t')
+                                                         aes <- genEAppTypes es' ts'
+                                                         return ((t', (OId lid')):aes)
+                                          _        -> do aes <- genEAppTypes es' ts'
+                                                         return ((t', v):aes)
                                         
 
 genExp (AExpr t (EAppS f str))  = do  id <- addGlobString str 
